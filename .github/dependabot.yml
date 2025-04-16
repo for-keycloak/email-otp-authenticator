@@ -1,0 +1,54 @@
+version: 2
+
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "main"
+    schedule:
+      interval: daily
+    commit-message:
+      prefix: deps
+    groups:
+      minor-versions:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "maven"
+    directory: "/"
+    target-branch: "main"
+    schedule:
+      interval: daily
+    commit-message:
+      prefix: deps
+    groups:
+      minor-versions:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "docker"
+    directory: "/infra"
+    target-branch: "main"
+    schedule:
+      interval: daily
+    commit-message:
+      prefix: deps
+    groups:
+      minor-versions:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    target-branch: "main"
+    schedule:
+      interval: daily
+    commit-message:
+      prefix: deps
+    groups:
+      minor-versions:
+        update-types:
+          - "minor"
+          - "patch"

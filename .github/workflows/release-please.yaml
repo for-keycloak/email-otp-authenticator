@@ -1,0 +1,83 @@
+name: 🚀 Release Please
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency: release-please
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+  packages: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@a02a34c4d625f9be7cb89156071d8567266a2445 # v4.2.0
+        id: release
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+
+  # The following jobs are executed only if a release is created
+  build-and-publish:
+    runs-on: ubuntu-latest
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    strategy:
+      fail-fast: false
+      matrix:
+        keycloak_version:
+          - keycloak-26.2.0
+          - keycloak-26.1.5
+          - keycloak-26.0.8
+          - keycloak-25.0.6
+          - keycloak-24.0.5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+          cache-dependency-path: 'pom.xml'
+
+      - name: build-keycloak-spi
+        run: |
+          mvn -B clean package \
+            -P"${{ matrix.keycloak_version }}" \
+            -D"buildVersion=${{ needs.release-please.outputs.tag_name }}"
+
+      - id: jar-filepath-step
+        run: echo "jar-filepath=$(find target -type f -name "*.jar" ! -name "original-*")" >> $GITHUB_OUTPUT
+
+      - name: Validate JAR file path
+        run: |
+          if [ -z "${{ steps.jar-filepath-step.outputs.jar-filepath }}" ]; then
+            echo "Error: JAR file not found."
+            exit 1
+          fi
+
+      - uses: sigstore/cosign-installer@d7d6bc7722e3daa8354c50bcb52f4837da5e9b6a # v3.8.1
+      - run: cosign version
+
+      - name: Sign JARs with Cosign
+        run: |
+          cosign sign-blob --yes ${{ steps.jar-filepath-step.outputs.jar-filepath }} \
+            --output-signature ${{ steps.jar-filepath-step.outputs.jar-filepath }}.sig \
+            --output-certificate ${{ steps.jar-filepath-step.outputs.jar-filepath }}.cert
+
+      - name: Upload file to release
+        run: |
+          gh release upload ${{ needs.release-please.outputs.tag_name }} ${{ steps.jar-filepath-step.outputs.jar-filepath }}
+          gh release upload ${{ needs.release-please.outputs.tag_name }} ${{ steps.jar-filepath-step.outputs.jar-filepath }}.sig
+          gh release upload ${{ needs.release-please.outputs.tag_name }} ${{ steps.jar-filepath-step.outputs.jar-filepath }}.cert
+        env:
+          GH_TOKEN: ${{ github.TOKEN }}

@@ -1,0 +1,7 @@
+.vscode
+.DS_Store
+dist
+target
+dist_keycloak
+build
+*.log
