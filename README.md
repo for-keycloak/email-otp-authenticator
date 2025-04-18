@@ -32,7 +32,7 @@ Add the following to your Dockerfile:
 # Download and install the authenticator
 ARG EMAIL_OTP_AUTHENTICATOR_VERSION="v1.0.0"
 ARG EMAIL_OTP_AUTHENTICATOR_KC_VERSION="26.2.0"
-ADD https://github.com/for-keycloak/email-otp-authenticator/releases/download/${EMAIL_OTP_AUTHENTICATOR_VERSION}/email_otp_authenticator-${EMAIL_OTP_AUTHENTICATOR_VERSION}-kc-${EMAIL_OTP_AUTHENTICATOR_KC_VERSION}.jar \
+ADD https://github.com/for-keycloak/email-otp-authenticator/releases/download/${EMAIL_OTP_AUTHENTICATOR_VERSION}/email-otp-authenticator-${EMAIL_OTP_AUTHENTICATOR_VERSION}-kc-${EMAIL_OTP_AUTHENTICATOR_KC_VERSION}.jar \
     /opt/keycloak/providers/email-otp-authenticator.jar
 ```
 
