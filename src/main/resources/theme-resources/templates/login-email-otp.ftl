@@ -1,10 +1,9 @@
 <#import "template.ftl" as layout>
 <@layout.registrationLayout displayMessage=!messagesPerField.existsError('email-otp'); section>
 <!-- template: login-email-otp.ftl -->
-
-    <#if section="header">
+    <#if section = "header">
         ${msg("doLogIn")}
-    <#elseif section="form">
+    <#elseif section = "form">
         <form id="kc-otp-login-form" class="${properties.kcFormClass!}" onsubmit="login.disabled = true; return true;" action="${url.loginAction}" method="post">
             <div class="${properties.kcFormGroupClass!}">
                 <div class="${properties.kcLabelWrapperClass!}">
@@ -23,26 +22,22 @@
             </div>
 
             <div class="${properties.kcFormGroupClass!}">
-                <div id="kc-form-options" class="${properties.kcFormOptionsClass!}">
-                    <div class="${properties.kcFormOptionsWrapperClass!}"></div>
-                </div>
-
                 <div id="kc-form-buttons" class="${properties.kcFormButtonsClass!}">
-                    <input
-                        class="${properties.kcButtonClass!} ${properties.kcButtonPrimaryClass!} ${properties.kcButtonBlockClass!} ${properties.kcButtonLargeClass!}"
-                        name="login"
-                        id="kc-login"
-                        type="submit"
-                        value="${msg("doLogIn")}"
-                    />
+                    <div class="${properties.kcFormButtonsWrapperClass!}">
+                        <button
+                            class="${properties.kcButtonClass!} ${properties.kcButtonPrimaryClass!} ${properties.kcButtonBlockClass!} ${properties.kcButtonLargeClass!}"
+                            name="login"
+                            id="kc-login"
+                            type="submit"
+                        >${kcSanitize(msg("doLogIn"))?no_esc}</button>
 
-                    <input
-                        class="${properties.kcButtonClass!} ${properties.kcButtonBlockClass!} ${properties.kcButtonLargeClass!}"
-                        name="resend-email"
-                        id="kc-resend-email"
-                        type="submit"
-                        value="${msg("doResendEmail")}"
-                    />
+                        <button
+                            class="${properties.kcButtonClass!} ${properties.kcButtonSecondaryClass!} ${properties.kcButtonBlockClass!} ${properties.kcButtonLargeClass!}"
+                            name="resend-email"
+                            id="kc-resend-email"
+                            type="submit"
+                        >${kcSanitize(msg("doResendEmail"))?no_esc}</button>
+                    </div>
                 </div>
             </div>
         </form>
