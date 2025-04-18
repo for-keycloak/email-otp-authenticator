@@ -37,6 +37,7 @@
 
         <!-- Dependency versions -->
         <jakarta.ws.rs-api.version>3.1.0</jakarta.ws.rs-api.version>
+        <freemarker.version>2.3.32</freemarker.version>
 
         <!-- Plugin versions -->
         <build-helper-maven-plugin.version>3.6.0</build-helper-maven-plugin.version>
@@ -94,6 +95,12 @@
             <groupId>org.keycloak</groupId>
             <artifactId>keycloak-services</artifactId>
             <version>${keycloak.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.freemarker</groupId>
+            <artifactId>freemarker</artifactId>
+            <version>${freemarker.version}</version>
             <scope>provided</scope>
         </dependency>
 
