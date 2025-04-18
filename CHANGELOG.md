@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.1.1](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.1.0...v1.1.1) (2025-04-18)
+
+
+### Documentation
+
+* added some missing docs and auto update version in README.md ([ad850e8](https://github.com/for-keycloak/email-otp-authenticator/commit/ad850e8b14522153f42aecf4c8272ccd3a3ccab2))
+
+
+### Miscellaneous Chores
+
+* add a pull request template ([af7b4d4](https://github.com/for-keycloak/email-otp-authenticator/commit/af7b4d4dbc452ae9575dbf050bcff2c6051337b1))
+* add UNLICENSE file ([f75339b](https://github.com/for-keycloak/email-otp-authenticator/commit/f75339bf18b795f6d2c1d35ef590a5dd691fbf0c))
+
 ## [1.1.0](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.0.0...v1.1.0) (2025-04-18)
 
 
