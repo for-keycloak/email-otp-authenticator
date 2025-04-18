@@ -1,4 +1,4 @@
-# ✉️ Keycloak Email OTP Authenticator
+# ✉️ Keycloak Email OTP Authenticator ![GitHub release (latest by date)](https://img.shields.io/github/v/release/for-keycloak/email-otp-authenticator)
 
 A custom authentication SPI for Keycloak that provides an Email-based One-Time Password (OTP) step in the authentication flow. This authenticator sends a time-limited OTP code to the user's email address and validates it.
 
@@ -17,6 +17,8 @@ A custom authentication SPI for Keycloak that provides an Email-based One-Time P
 
 The authenticator provides the following configuration options:
 
+- **User Role**: Only applies the authenticator to users with this role (default: `<null>`)
+- **Negate User Role**: Applies the authenticator to users without the selected role, inverting the condition (default: `false`)
 - **Code Length**: Length of the generated OTP code (default: `6`)
 - **Code Alphabet**: Characters used for generating the code (default: `23456789ABCDEFGHJKLMNPQRSTUVWXYZ`)
 - **Code Expiration**: Time in seconds before the code expires (default: `600` = 10 minutes)
@@ -30,7 +32,7 @@ Add the following to your Dockerfile:
 
 ```dockerfile
 # Download and install the authenticator
-ARG EMAIL_OTP_AUTHENTICATOR_VERSION="v1.0.0"
+ARG EMAIL_OTP_AUTHENTICATOR_VERSION="v1.0.0" # x-release-please-version
 ARG EMAIL_OTP_AUTHENTICATOR_KC_VERSION="26.2.0"
 ADD https://github.com/for-keycloak/email-otp-authenticator/releases/download/${EMAIL_OTP_AUTHENTICATOR_VERSION}/email-otp-authenticator-${EMAIL_OTP_AUTHENTICATOR_VERSION}-kc-${EMAIL_OTP_AUTHENTICATOR_KC_VERSION}.jar \
     /opt/keycloak/providers/email-otp-authenticator.jar
@@ -107,7 +109,7 @@ While the builds differ slightly for each version, the core functionality remain
 
 ## License
 
-This project is released under the [Unlicense](https://unlicense.org/). This means you can copy, modify, publish, use, compile, sell, or distribute this software, either in source code form or as a compiled binary, for any purpose, commercial or non-commercial, and by any means.
+This project is released under the [Unlicense](./UNLICENSE). This means you can copy, modify, publish, use, compile, sell, or distribute this software, either in source code form or as a compiled binary, for any purpose, commercial or non-commercial, and by any means.
 
 ### Why Unlicense?
 

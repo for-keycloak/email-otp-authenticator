@@ -5,6 +5,9 @@
       "release-type": "maven",
       "skip-snapshot": true,
       "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        "README.md"
+      ],
       "changelog-sections": [
         {"type": "feat",     "section": "Features"},
         {"type": "feature",  "section": "Features"},
