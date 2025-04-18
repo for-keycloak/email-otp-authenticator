@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.2](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.1.1...v1.1.2) (2025-04-18)
+
+
+### Dependencies
+
+* bump jakarta.ws.rs:jakarta.ws.rs-api from 3.1.0 to 4.0.0 ([#3](https://github.com/for-keycloak/email-otp-authenticator/issues/3)) ([d09c727](https://github.com/for-keycloak/email-otp-authenticator/commit/d09c72784d4d93cb51b918ca9d837bd89f5a2bc9))
+* bump maven from 3.9.9-eclipse-temurin-21-jammy to 3-eclipse-temurin-22-jammy in /infra in the minor-versions group ([#2](https://github.com/for-keycloak/email-otp-authenticator/issues/2)) ([7a6541a](https://github.com/for-keycloak/email-otp-authenticator/commit/7a6541abf0e4ee670166faeea6a0422165f94e77))
+
 ## [1.1.1](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.1.0...v1.1.1) (2025-04-18)
 
 
