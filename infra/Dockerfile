@@ -1,5 +1,5 @@
 # Download dependencies stage
-FROM maven:3.9.9-eclipse-temurin-21-jammy AS dependencies
+FROM maven:3-eclipse-temurin-22-jammy AS dependencies
 
 WORKDIR /opt/maven
 
@@ -9,7 +9,7 @@ RUN mvn dependency:go-offline
 
 
 # Build stage
-FROM maven:3.9.9-eclipse-temurin-21-jammy
+FROM maven:3-eclipse-temurin-22-jammy
 
 WORKDIR /opt/maven
 
