@@ -20,6 +20,7 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.RoleModel;
 import org.keycloak.models.UserModel;
+import org.keycloak.services.messages.Messages;
 import org.keycloak.sessions.AuthenticationSessionModel;
 
 import ch.jacem.for_keycloak.email_otp_authenticator.authentication.authenticators.conditional.AcceptsFullContextInConfiguredFor;
@@ -213,8 +214,11 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
         if (null == otp || otp.isEmpty()) {
             logger.error("OTP is not set in the auth session.");
 
-            context.getEvent().error(Errors.INVALID_USER_CREDENTIALS);
-            context.failure(AuthenticationFlowError.INTERNAL_ERROR);
+            context.getEvent().user(context.getUser()).error(Errors.INVALID_USER_CREDENTIALS);
+            context.failureChallenge(
+                AuthenticationFlowError.INTERNAL_ERROR,
+                this.challenge(context, Messages.INTERNAL_SERVER_ERROR, null)
+            );
 
             return;
         }
@@ -225,8 +229,11 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
         if (email == null || email.isEmpty()) {
             logger.error("User does not have an email address configured.");
 
-            context.getEvent().error(Errors.INVALID_EMAIL);
-            context.failure(AuthenticationFlowError.INVALID_USER);
+            context.getEvent().user(user).error(Errors.INVALID_EMAIL);
+            context.failureChallenge(
+                AuthenticationFlowError.INVALID_USER,
+                this.challenge(context, Messages.INVALID_EMAIL, null)
+            );
 
             return;
         }
@@ -250,8 +257,11 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
         } catch (Exception e) {
             logger.error("Failed to send OTP email", e);
 
-            context.getEvent().error(Errors.EMAIL_SEND_FAILED);
-            context.failure(AuthenticationFlowError.INTERNAL_ERROR);
+            context.getEvent().user(user).error(Errors.EMAIL_SEND_FAILED);
+            context.failureChallenge(
+                AuthenticationFlowError.INTERNAL_ERROR,
+                this.challenge(context, Messages.EMAIL_SENT_ERROR, null)
+            );
         }
     }
 
