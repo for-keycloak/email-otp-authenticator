@@ -79,6 +79,20 @@ public class EmailOTPFormAuthenticatorFactory implements AuthenticatorFactory {
     public List<ProviderConfigProperty> getConfigProperties() {
         return Arrays.asList(
             new ProviderConfigProperty(
+                SETTINGS_KEY_USER_ROLE,
+                "User Role",
+                "The OTP will only be required for users with this role. Leave empty to require OTP for all users. Check the 'Negate User Role' option to require OTP for all users except those with this role.",
+                ProviderConfigProperty.ROLE_TYPE,
+                SETTINGS_DEFAULT_VALUE_USER_ROLE
+            ),
+            new ProviderConfigProperty(
+                SETTINGS_KEY_NEGATE_USER_ROLE,
+                "Negate User Role",
+                "If checked, the OTP will be required for all users except those with the specified role.",
+                ProviderConfigProperty.BOOLEAN_TYPE,
+                String.valueOf(SETTINGS_DEFAULT_VALUE_NEGATE_USER_ROLE)
+            ),
+            new ProviderConfigProperty(
                 SETTINGS_KEY_CODE_ALPHABET,
                 "Code Alphabet",
                 "The alphabet used to generate the code.",

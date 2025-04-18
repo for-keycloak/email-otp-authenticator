@@ -15,16 +15,19 @@ import org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAu
 import org.keycloak.email.EmailTemplateProvider;
 import org.keycloak.events.Errors;
 import org.keycloak.forms.login.LoginFormsProvider;
+import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
+import org.keycloak.models.RoleModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.sessions.AuthenticationSessionModel;
 
+import ch.jacem.for_keycloak.email_otp_authenticator.authentication.authenticators.conditional.AcceptsFullContextInConfiguredFor;
 import ch.jacem.for_keycloak.email_otp_authenticator.helpers.ConfigHelper;
 
 import org.jboss.logging.Logger;
 
-public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
+public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator implements AcceptsFullContextInConfiguredFor
 {
     public static final String AUTH_NOTE_OTP_KEY = "for-kc-email-otp-key";
     public static final String AUTH_NOTE_OTP_CREATED_AT = "for-kc-email-otp-created-at";
@@ -141,6 +144,26 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
     @Override
     protected Response createLoginForm(LoginFormsProvider form) {
         return form.createForm(OTP_FORM_TEMPLATE_NAME);
+    }
+
+    @Override
+    public boolean configuredFor(AuthenticationFlowContext context, AuthenticatorConfigModel config) {
+        RealmModel realm = context.getRealm();
+        UserModel user = context.getUser();
+
+        if (null == user) {
+            return false;
+        }
+
+        String configuredRole = ConfigHelper.getRole(config);
+        if (null != configuredRole && !configuredRole.isEmpty()) {
+            RoleModel role = realm.getRole(configuredRole);
+            if (null != role && user.hasRole(role) == ConfigHelper.getNegateRole(config)) {
+                return false;
+            }
+        }
+
+        return null != user.getEmail() && !user.getEmail().isEmpty();
     }
 
     @Override

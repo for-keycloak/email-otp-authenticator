@@ -1,1 +1,2 @@
 ch.jacem.for_keycloak.email_otp_authenticator.EmailOTPFormAuthenticatorFactory
+ch.jacem.for_keycloak.email_otp_authenticator.authentication.authenticators.conditional.CustomConditionalUserConfiguredAuthenticatorFactory
