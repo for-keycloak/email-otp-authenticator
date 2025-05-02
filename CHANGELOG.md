@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.3](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.1.2...v1.1.3) (2025-05-02)
+
+
+### Bug Fixes
+
+* only regenerate otp when needed ([#11](https://github.com/for-keycloak/email-otp-authenticator/issues/11)) ([32bd510](https://github.com/for-keycloak/email-otp-authenticator/commit/32bd5109a01a41d179e5173a8d099e3f9d0d72de))
+
 ## [1.1.2](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.1.1...v1.1.2) (2025-04-23)
 
 
