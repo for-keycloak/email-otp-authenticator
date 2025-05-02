@@ -101,8 +101,7 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
         // Check if the OTP is expired
         if (this.isOtpExpired(context)) {
             // In this case, we generate a new OTP
-            this.generateOtp(context);
-            this.sendGeneratedOtp(context);
+            this.generateOtp(context, true);
 
             context.getEvent().user(user).error(Errors.EXPIRED_CODE);
             context.failureChallenge(
@@ -124,8 +123,7 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
 
     @Override
     public void authenticate(AuthenticationFlowContext context) {
-        this.generateOtp(context);
-        this.sendGeneratedOtp(context);
+        this.generateOtp(context, false);
 
         context.challenge(
             this.challenge(context, null)
@@ -190,7 +188,13 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
     public void close() {
     }
 
-    private String generateOtp(AuthenticationFlowContext context) {
+    private String generateOtp(AuthenticationFlowContext context, boolean forceRegenerate) {
+        // If the OTP is already set in the auth session and we are not forcing a regeneration, return it
+        String existingOtp = context.getAuthenticationSession().getAuthNote(AUTH_NOTE_OTP_KEY);
+        if (!forceRegenerate && existingOtp != null && !existingOtp.isEmpty() && !this.isOtpExpired(context)) {
+            return existingOtp;
+        }
+
         String alphabet = ConfigHelper.getOtpCodeAlphabet(context);
         int length = ConfigHelper.getOtpCodeLength(context);
 
@@ -204,6 +208,8 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
 
         context.getAuthenticationSession().setAuthNote(AUTH_NOTE_OTP_CREATED_AT, String.valueOf(System.currentTimeMillis() / 1000));
         context.getAuthenticationSession().setAuthNote(AUTH_NOTE_OTP_KEY, otp);
+
+        this.sendGeneratedOtp(context);
 
         return otp;
     }
