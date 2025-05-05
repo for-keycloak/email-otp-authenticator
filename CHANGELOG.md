@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.4](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.1.3...v1.1.4) (2025-05-05)
+
+
+### Bug Fixes
+
+* regenerate a new code when clicking on resend ([#13](https://github.com/for-keycloak/email-otp-authenticator/issues/13)) ([2934627](https://github.com/for-keycloak/email-otp-authenticator/commit/293462754bdb1b923abb60d1c723f07c619a0027))
+
 ## [1.1.3](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.1.2...v1.1.3) (2025-05-02)
 
 
