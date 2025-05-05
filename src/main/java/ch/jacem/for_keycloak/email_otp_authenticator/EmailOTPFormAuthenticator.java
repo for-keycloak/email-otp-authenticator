@@ -65,10 +65,10 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
         }
 
         if (inputData.containsKey(OTP_FORM_RESEND_ACTION_NAME)) {
-            logger.debug("Resending OTP");
+            logger.debug("Resending a new OTP");
 
-            // Resend a new OTP
-            this.sendGeneratedOtp(context);
+            // Regenerate and resend a new OTP
+            this.generateOtp(context, true);
 
             // Reshow the form
             context.challenge(
