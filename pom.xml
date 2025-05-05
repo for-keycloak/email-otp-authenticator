@@ -33,7 +33,7 @@
         <buildVersion>dev</buildVersion>
 
         <!-- Default Keycloak version -->
-        <keycloak.version>26.2.0</keycloak.version>
+        <keycloak.version>26.2.3</keycloak.version>
 
         <!-- Dependency versions -->
         <jakarta.ws.rs-api.version>4.0.0</jakarta.ws.rs-api.version>
