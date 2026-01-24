@@ -3,4 +3,4 @@ ${kcSanitize(msg("emailOtpYourAccessCode"))}
 
 ${otp}
 
-${kcSanitize(msg("emailOtpExpiration", (ttl / 60)?int))}
+${kcSanitize(msg("emailOtpExpiration", ttlMinutes))}

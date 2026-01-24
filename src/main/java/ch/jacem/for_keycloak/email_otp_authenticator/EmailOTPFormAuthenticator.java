@@ -271,8 +271,10 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
 
         try {
             Map<String, Object> attributes = new HashMap<String, Object>();
+            int ttlSeconds = ConfigHelper.getOtpLifetime(context);
             attributes.put("otp", otp);
-            attributes.put("ttl", ConfigHelper.getOtpLifetime(context));
+            attributes.put("ttl", ttlSeconds);
+            attributes.put("ttlMinutes", ttlSeconds / 60);
 
             context.getSession()
                 .getProvider(EmailTemplateProvider.class)

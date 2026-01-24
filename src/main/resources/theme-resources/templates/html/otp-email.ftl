@@ -2,5 +2,5 @@
 <@layout.emailLayout>
 <p>${kcSanitize(msg("emailOtpYourAccessCode"))?no_esc}</p>
 <h1>${otp?no_esc}</h1>
-<p>${kcSanitize(msg("emailOtpExpiration", (ttl / 60)?int))?no_esc}</p>
+<p>${kcSanitize(msg("emailOtpExpiration", ttlMinutes))?no_esc}</p>
 </@layout.emailLayout>
