@@ -68,7 +68,7 @@ just build-version 25.0.6
 A docker-compose configuration is provided for testing, which includes:
 
 - Keycloak server with the authenticator installed (accessible at http://localhost:8080)
-- MailHog for email testing (accessible at http://localhost:8025)
+- MailPit for email testing (accessible at http://localhost:8025)
 
 Start the environment:
 ```bash
@@ -79,7 +79,7 @@ just up    # Starts Keycloak with the authenticator
 ```bash
 # You can use admin/admin as the default credentials
 # You SHOULD configure the mail settings in the realm you want to test
-# - Set the server to `mailhog`
+# - Set the server to `mailpit`
 # - Set the port to `1025`
 
 # The user you want to test with MUST have their `email` address set
@@ -91,7 +91,7 @@ just down  # Stops the environment
 
 Access:
 - Keycloak: http://localhost:8080 (admin/admin)
-- MailHog: http://localhost:8025 (to view sent emails)
+- MailPit: http://localhost:8025 (to view sent emails)
 
 
 ## Supported Keycloak Versions

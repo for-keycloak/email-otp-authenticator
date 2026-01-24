@@ -21,10 +21,10 @@ services:
       - ./target/email-otp-authenticator-dev-kc-26.5.1.jar:/opt/keycloak/providers/email-otp-authenticator.jar
     command: start-dev
     depends_on:
-      - mailhog
+      - mailpit
 
-  mailhog:
-    image: mailhog/mailhog
+  mailpit:
+    image: axllent/mailpit:latest
     ports:
       - "8025:8025" # Web UI
       - "1025:1025" # SMTP Server
