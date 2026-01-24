@@ -34,7 +34,10 @@ jobs:
       fail-fast: false
       matrix:
         keycloak_version:
-          - keycloak-26.2.0
+          - keycloak-26.5.1
+          - keycloak-26.4.7
+          - keycloak-26.3.5
+          - keycloak-26.2.5
           - keycloak-26.1.5
           - keycloak-26.0.8
           - keycloak-25.0.6

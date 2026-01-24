@@ -1,6 +1,6 @@
 services:
   keycloak:
-    image: quay.io/keycloak/keycloak:26.2.0
+    image: quay.io/keycloak/keycloak:26.5.1
     environment:
       # Admin console credentials
       KEYCLOAK_ADMIN: admin
@@ -18,7 +18,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./target/email-otp-authenticator-dev-kc-26.2.0.jar:/opt/keycloak/providers/email-otp-authenticator.jar
+      - ./target/email-otp-authenticator-dev-kc-26.5.1.jar:/opt/keycloak/providers/email-otp-authenticator.jar
     command: start-dev
     depends_on:
       - mailhog
