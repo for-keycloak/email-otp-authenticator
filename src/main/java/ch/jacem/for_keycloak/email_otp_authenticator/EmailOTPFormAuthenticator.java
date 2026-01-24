@@ -123,11 +123,36 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
 
     @Override
     public void authenticate(AuthenticationFlowContext context) {
+        // Check role condition - skip OTP if user doesn't match criteria
+        if (!this.shouldRequireOtp(context)) {
+            context.success();
+            return;
+        }
+
         this.generateOtp(context, false);
 
         context.challenge(
             this.challenge(context, null)
         );
+    }
+
+    private boolean shouldRequireOtp(AuthenticationFlowContext context) {
+        RealmModel realm = context.getRealm();
+        UserModel user = context.getUser();
+
+        if (null == user) {
+            return false;
+        }
+
+        String configuredRole = ConfigHelper.getRole(context);
+        if (null != configuredRole && !configuredRole.isEmpty()) {
+            RoleModel role = realm.getRole(configuredRole);
+            if (null != role && user.hasRole(role) == ConfigHelper.getNegateRole(context)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     @Override

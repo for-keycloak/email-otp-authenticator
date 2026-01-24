@@ -67,6 +67,11 @@ public class CustomConditionalUserConfiguredAuthenticator extends ConditionalUse
             return ((AcceptsFullContextInConfiguredFor) authenticator).configuredFor(context, config);
         }
 
+        // Guard against null user - can happen before authentication completes
+        if (context.getUser() == null) {
+            return false;
+        }
+
         return authenticator.configuredFor(context.getSession(), context.getRealm(), context.getUser());
     }
 }
