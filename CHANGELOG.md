@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.2.0](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.1.4...v1.2.0) (2026-01-25)
+
+
+### Features
+
+* **build:** add support for Keycloak 26.2.5-26.5.1 ([689b796](https://github.com/for-keycloak/email-otp-authenticator/commit/689b7961d4cd449affa5457787f459b32dbfdc41))
+* **otp:** add role-based conditional authentication ([70c201e](https://github.com/for-keycloak/email-otp-authenticator/commit/70c201ea640ef17a1a20feb5fc0c8e584ce49439)), closes [#15](https://github.com/for-keycloak/email-otp-authenticator/issues/15)
+
+
+### Bug Fixes
+
+* **email:** calculate TTL minutes in Java instead of FreeMarker ([e5b6572](https://github.com/for-keycloak/email-otp-authenticator/commit/e5b65729b36e30c22473521678f870b0c0c8ea84))
+
+
+### Tests
+
+* **e2e:** add Playwright end-to-end tests ([5e16d7b](https://github.com/for-keycloak/email-otp-authenticator/commit/5e16d7bd12f2f6abe684ebf926f2ee55cb5eaa25))
+
+
+### Continuous Integration
+
+* **release:** update GitHub Actions to latest versions ([2ad13a5](https://github.com/for-keycloak/email-otp-authenticator/commit/2ad13a5b2ffad8da68f4100822b84b7b8afd9cf1))
+
 ## [1.1.4](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.1.3...v1.1.4) (2025-05-05)
 
 
