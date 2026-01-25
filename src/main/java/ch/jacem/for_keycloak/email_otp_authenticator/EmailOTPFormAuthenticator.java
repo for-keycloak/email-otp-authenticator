@@ -123,9 +123,15 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
 
     @Override
     public void authenticate(AuthenticationFlowContext context) {
-        // Check role condition - skip OTP if user doesn't match criteria
+        // Check role condition - if user doesn't match criteria, skip this authenticator
         if (!this.shouldRequireOtp(context)) {
-            context.success();
+            // In REQUIRED mode: use success() to skip (allows role-based filtering)
+            // In ALTERNATIVE mode: use attempted() to prevent 2FA bypass
+            if (context.getExecution().isRequired()) {
+                context.success();
+            } else {
+                context.attempted();
+            }
             return;
         }
 
@@ -192,7 +198,7 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
 
     @Override
     public boolean configuredFor(KeycloakSession session, RealmModel realm, UserModel user) {
-        return null != user.getEmail() && !user.getEmail().isEmpty();
+        return user != null && user.getEmail() != null && !user.getEmail().isEmpty();
     }
 
     @Override

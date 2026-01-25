@@ -102,4 +102,29 @@ export class TwoFactorChoice {
       }
     }
   }
+
+  async isEmailOtpOptionVisible(): Promise<boolean> {
+    // Check specifically for Email OTP in the authentication method selection list
+    // Keycloak shows options as clickable divs/links with the authenticator display name
+    const selectors = [
+      '.select-auth-box-parent:has-text("Email OTP")',
+      '.select-auth-box-desc:has-text("Email")',
+      '#kc-select-credential-form :has-text("Email OTP")',
+      'a[id*="email-otp"]',
+      'div.pf-c-tile:has-text("Email")',
+    ];
+
+    for (const selector of selectors) {
+      const element = this.page.locator(selector).first();
+      if (await element.isVisible({ timeout: 1000 }).catch(() => false)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async isTryAnotherWayVisible(): Promise<boolean> {
+    const tryAnotherLink = this.page.locator('a:has-text("Try another way"), a:has-text("try another way"), #try-another-way');
+    return await tryAnotherLink.isVisible({ timeout: 2000 }).catch(() => false);
+  }
 }
