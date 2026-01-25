@@ -74,13 +74,11 @@ jobs:
       - name: Sign JARs with Cosign
         run: |
           cosign sign-blob --yes ${{ steps.jar-filepath-step.outputs.jar-filepath }} \
-            --output-signature ${{ steps.jar-filepath-step.outputs.jar-filepath }}.sig \
-            --output-certificate ${{ steps.jar-filepath-step.outputs.jar-filepath }}.cert
+            --bundle ${{ steps.jar-filepath-step.outputs.jar-filepath }}.bundle
 
       - name: Upload file to release
         run: |
           gh release upload ${{ needs.release-please.outputs.tag_name }} ${{ steps.jar-filepath-step.outputs.jar-filepath }}
-          gh release upload ${{ needs.release-please.outputs.tag_name }} ${{ steps.jar-filepath-step.outputs.jar-filepath }}.sig
-          gh release upload ${{ needs.release-please.outputs.tag_name }} ${{ steps.jar-filepath-step.outputs.jar-filepath }}.cert
+          gh release upload ${{ needs.release-please.outputs.tag_name }} ${{ steps.jar-filepath-step.outputs.jar-filepath }}.bundle
         env:
           GH_TOKEN: ${{ github.TOKEN }}
