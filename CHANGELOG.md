@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.4](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.2.3...v1.2.4) (2026-01-25)
+
+
+### Continuous Integration
+
+* **workflows:** harden permissions and use GITHUB_TOKEN ([df007f5](https://github.com/for-keycloak/email-otp-authenticator/commit/df007f57c45d6443a96dbb37bc1e012a2c00ed11))
+
 ## [1.2.3](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.2.2...v1.2.3) (2026-01-25)
 
 
