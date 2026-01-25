@@ -11,7 +11,6 @@ permissions:
   contents: write
   pull-requests: write
   id-token: write
-  packages: write
 
 jobs:
   release-please:
@@ -23,7 +22,7 @@ jobs:
       - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
         id: release
         with:
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   # The following jobs are executed only if a release is created
   build-and-publish:
