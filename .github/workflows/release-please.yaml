@@ -34,14 +34,10 @@ jobs:
       fail-fast: false
       matrix:
         keycloak_version:
-          - keycloak-26.5.1
+          - keycloak-26.5.2
           - keycloak-26.4.7
           - keycloak-26.3.5
           - keycloak-26.2.5
-          - keycloak-26.1.5
-          - keycloak-26.0.8
-          - keycloak-25.0.6
-          - keycloak-24.0.5
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 

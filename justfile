@@ -39,22 +39,18 @@ shell:
 # List all available Keycloak versions
 versions:
     @echo "Supported Keycloak versions:"
-    @echo "- 26.5.1 (default)"
+    @echo "- 26.5.2 (default)"
     @echo "- 26.4.7"
     @echo "- 26.3.5"
     @echo "- 26.2.5"
-    @echo "- 26.1.5"
-    @echo "- 26.0.8"
-    @echo "- 25.0.6"
-    @echo "- 24.0.5"
 
 # Run E2E tests (builds JAR first, runs everything in Docker)
-test-e2e KC_VERSION="26.5.1": (build-version KC_VERSION)
+test-e2e KC_VERSION="26.5.2": (build-version KC_VERSION)
     cd tests/e2e && KC_VERSION={{KC_VERSION}} docker compose --profile test up --build --abort-on-container-exit --exit-code-from test-runner
     cd tests/e2e && KC_VERSION={{KC_VERSION}} docker compose --profile test down
 
 # Start test infrastructure only (for debugging)
-test-e2e-setup KC_VERSION="26.5.1": (build-version KC_VERSION)
+test-e2e-setup KC_VERSION="26.5.2": (build-version KC_VERSION)
     cd tests/e2e && KC_VERSION={{KC_VERSION}} docker compose up -d --wait
 
 # Stop test containers
