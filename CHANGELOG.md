@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.2.2](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.2.1...v1.2.2) (2026-01-25)
+
+
+### Bug Fixes
+
+* **auth:** prevent 2FA bypass when user lacks required role in alternative flows ([954adb7](https://github.com/for-keycloak/email-otp-authenticator/commit/954adb7c9caee2d9466ecb507294b0cad919fd19))
+
+
+### Miscellaneous Chores
+
+* **build:** update Keycloak versions ([933cd80](https://github.com/for-keycloak/email-otp-authenticator/commit/933cd803ffb8c4d751a5bf948f0400d859486099))
+
+
+### Dependencies
+
+* **ci:** bump actions/checkout to v6.0.2 ([2d57874](https://github.com/for-keycloak/email-otp-authenticator/commit/2d578747cdff0dccca0dd0ff916b92da499b9338))
+
 ## [1.2.1](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.2.0...v1.2.1) (2026-01-25)
 
 
