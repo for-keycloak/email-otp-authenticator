@@ -69,6 +69,53 @@ test.describe('Email OTP Alternative Flow', () => {
       await loginPage.expectLoggedIn();
     });
 
+    test('user without role, has TOTP - selecting Email OTP does not bypass 2FA', async ({ page }) => {
+      const loginPage = new LoginPage(page);
+      const totpForm = new TotpForm(page);
+      const choice = new TwoFactorChoice(page);
+
+      await loginPage.goto(REALM);
+      await loginPage.login('user-totp-only', TEST_PASSWORD);
+
+      // Should see TOTP form
+      await totpForm.expectVisible();
+
+      // If "Try another way" is visible, try selecting Email OTP
+      const hasTryAnotherWay = await choice.isTryAnotherWayVisible();
+      if (hasTryAnotherWay) {
+        await choice.clickTryAnotherWay();
+        await page.waitForTimeout(500);
+
+        // Try to select Email OTP (if visible)
+        const emailOtpOption = page.locator('text="Email OTP"').first();
+        if (await emailOtpOption.isVisible({ timeout: 1000 }).catch(() => false)) {
+          await emailOtpOption.click();
+          await page.waitForLoadState('networkidle');
+
+          // User should NOT be logged in - should still be on a 2FA page
+          // The flow should either show an error or redirect back to TOTP
+          const isLoggedIn = await page.url().includes('/account') ||
+            await page.locator('text="Sign out"').isVisible({ timeout: 1000 }).catch(() => false);
+          expect(isLoggedIn).toBe(false);
+
+          // Should be back on TOTP form or still in auth flow
+          const onAuthPage = await page.url().includes('/login-actions') ||
+            await totpForm.expectVisible().then(() => true).catch(() => false);
+          expect(onAuthPage).toBe(true);
+        }
+      }
+
+      // Complete TOTP login normally
+      // First go back if needed
+      if (!await page.locator('#otp').isVisible({ timeout: 1000 }).catch(() => false)) {
+        await page.goBack();
+      }
+      await totpForm.expectVisible();
+      const totpCode = generateTotpCode('user-totp-only');
+      await totpForm.enterCode(totpCode);
+      await loginPage.expectLoggedIn();
+    });
+
     test('user with role, no TOTP - sees Email OTP', async ({ page }) => {
       const loginPage = new LoginPage(page);
       const otpForm = new OtpForm(page);

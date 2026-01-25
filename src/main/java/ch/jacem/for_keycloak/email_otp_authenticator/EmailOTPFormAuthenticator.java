@@ -15,6 +15,8 @@ import org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAu
 import org.keycloak.email.EmailTemplateProvider;
 import org.keycloak.events.Errors;
 import org.keycloak.forms.login.LoginFormsProvider;
+import org.keycloak.models.AuthenticationExecutionModel;
+import org.keycloak.models.AuthenticationFlowModel;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
@@ -123,9 +125,15 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
 
     @Override
     public void authenticate(AuthenticationFlowContext context) {
-        // Check role condition - skip OTP if user doesn't match criteria
+        // Check role condition - if user doesn't match criteria, skip this authenticator
         if (!this.shouldRequireOtp(context)) {
-            context.success();
+            // In REQUIRED mode: use success() to skip (allows role-based filtering)
+            // In ALTERNATIVE mode: use attempted() to prevent 2FA bypass
+            if (context.getExecution().isRequired()) {
+                context.success();
+            } else {
+                context.attempted();
+            }
             return;
         }
 
@@ -192,7 +200,78 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
 
     @Override
     public boolean configuredFor(KeycloakSession session, RealmModel realm, UserModel user) {
-        return null != user.getEmail() && !user.getEmail().isEmpty();
+        if (user == null || user.getEmail() == null || user.getEmail().isEmpty()) {
+            logger.debugf("configuredFor: user is null or has no email");
+            return false;
+        }
+
+        // Check all authentication flows for email-otp-form executions (including nested subflows)
+        // Return true only if user matches at least one execution's role requirement
+        for (AuthenticationFlowModel flow : realm.getAuthenticationFlowsStream().toList()) {
+            logger.debugf("configuredFor: checking flow %s", flow.getAlias());
+            if (isUserConfiguredForEmailOtpInFlow(realm, user, flow.getId())) {
+                logger.debugf("configuredFor: user %s is configured for email-otp in flow %s", user.getUsername(), flow.getAlias());
+                return true;
+            }
+        }
+
+        // User doesn't match any email-otp-form execution's requirements
+        logger.debugf("configuredFor: user %s is NOT configured for any email-otp execution", user.getUsername());
+        return false;
+    }
+
+    private boolean isUserConfiguredForEmailOtpInFlow(RealmModel realm, UserModel user, String flowId) {
+        for (AuthenticationExecutionModel execution : realm.getAuthenticationExecutionsStream(flowId).toList()) {
+            // If this is a subflow, recursively check it
+            if (execution.isAuthenticatorFlow()) {
+                String subflowId = execution.getFlowId();
+                if (subflowId != null && isUserConfiguredForEmailOtpInFlow(realm, user, subflowId)) {
+                    return true;
+                }
+                continue;
+            }
+
+            // Check if this is an email-otp-form execution
+            if (!EmailOTPFormAuthenticatorFactory.PROVIDER_ID.equals(execution.getAuthenticator())) {
+                continue;
+            }
+
+            // Get the config for this execution
+            String configId = execution.getAuthenticatorConfig();
+            if (configId == null) {
+                // No config means no role restriction - user is eligible
+                return true;
+            }
+
+            AuthenticatorConfigModel config = realm.getAuthenticatorConfigById(configId);
+            if (config == null) {
+                // Config not found, treat as no restriction
+                return true;
+            }
+
+            // Check role requirement
+            String configuredRole = ConfigHelper.getRole(config);
+            if (configuredRole == null || configuredRole.isEmpty()) {
+                // No role configured - user is eligible
+                return true;
+            }
+
+            RoleModel role = realm.getRole(configuredRole);
+            if (role == null) {
+                // Role doesn't exist - treat as no restriction
+                return true;
+            }
+
+            // Check if user matches the role requirement (considering negation)
+            boolean hasRole = user.hasRole(role);
+            boolean negateRole = ConfigHelper.getNegateRole(config);
+            if (hasRole != negateRole) {
+                // User matches this execution's requirement
+                return true;
+            }
+        }
+
+        return false;
     }
 
     @Override

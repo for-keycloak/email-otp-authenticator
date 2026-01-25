@@ -106,6 +106,17 @@ The authenticator is built and tested with multiple Keycloak versions:
 While the builds differ slightly for each version, the core functionality remains the same. The version-specific builds ensure compatibility and proper integration with each Keycloak release.
 
 
+## Known Limitations
+
+### Email OTP appears in "Try Another Way" for users without the required role
+
+When using role-based filtering in an ALTERNATIVE flow alongside other 2FA methods (e.g., TOTP), Email OTP may still appear in Keycloak's "Try another way" selection list for users who don't have the required role. This is a Keycloak architectural limitation - the selection list is built using a different code path that doesn't fully respect our role filtering.
+
+**Important:** Selecting Email OTP in this case will **not** bypass 2FA. The user will be redirected back to complete their other configured 2FA method (e.g., TOTP).
+
+**Workaround:** If you need to completely hide Email OTP for certain users, use Keycloak's built-in **Condition - User Role** execution in a conditional subflow instead of the authenticator's role filtering option.
+
+
 ## License
 
 This project is released under the [Unlicense](./UNLICENSE). This means you can copy, modify, publish, use, compile, sell, or distribute this software, either in source code form or as a compiled binary, for any purpose, commercial or non-commercial, and by any means.
