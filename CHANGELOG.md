@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.2.0...v1.2.1) (2026-01-25)
+
+
+### Bug Fixes
+
+* **ci:** update cosign command for v4 bundle format ([c1d67ee](https://github.com/for-keycloak/email-otp-authenticator/commit/c1d67eee8b87657acc8856da52b7dc3b9b6da2c1))
+
 ## [1.2.0](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.1.4...v1.2.0) (2026-01-25)
 
 
