@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.3](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.2.2...v1.2.3) (2026-01-25)
+
+
+### Dependencies
+
+* bump the minor-versions group across 1 directory with 6 updates ([#30](https://github.com/for-keycloak/email-otp-authenticator/issues/30)) ([eda1bb0](https://github.com/for-keycloak/email-otp-authenticator/commit/eda1bb0188b2acda1e8ab0df6af4318d13e55e6f))
+
 ## [1.2.2](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.2.1...v1.2.2) (2026-01-25)
 
 
