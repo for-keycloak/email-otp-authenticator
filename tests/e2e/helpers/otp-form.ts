@@ -3,9 +3,20 @@ import { Page, expect } from '@playwright/test';
 export class OtpForm {
   constructor(private page: Page) {}
 
-  async enterCode(code: string) {
+  async enterCode(code: string, trustDevice: boolean = false) {
     await this.page.fill('#email-otp', code);
+    if (trustDevice) {
+      await this.checkTrustDevice();
+    }
     await this.page.click('#kc-login');
+  }
+
+  async submitEmpty() {
+    await this.page.click('#kc-login');
+  }
+
+  async clearCode() {
+    await this.page.fill('#email-otp', '');
   }
 
   async clickResend() {
@@ -26,6 +37,26 @@ export class OtpForm {
     // The specific error message for invalid OTP
     const pageContent = await this.page.content();
     expect(pageContent.toLowerCase()).toContain('invalid');
+  }
+
+  async expectTrustDeviceCheckboxVisible() {
+    await expect(this.page.locator('#trust-device')).toBeVisible();
+  }
+
+  async expectTrustDeviceCheckboxNotVisible() {
+    await expect(this.page.locator('#trust-device')).not.toBeVisible();
+  }
+
+  async checkTrustDevice() {
+    await this.page.check('#trust-device');
+  }
+
+  async isTrustDeviceChecked(): Promise<boolean> {
+    return this.page.isChecked('#trust-device');
+  }
+
+  async getTrustDeviceLabel(): Promise<string> {
+    return this.page.locator('label[for="trust-device"]').innerText();
   }
 }
 

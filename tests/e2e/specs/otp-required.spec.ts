@@ -5,6 +5,7 @@ import { mailpit } from '../setup/mailpit.js';
 import { TEST_PASSWORD } from '../setup/global-setup.js';
 
 const REALM = 'test-otp-required';
+const REALM_SHORT_TTL = 'test-short-ttl';
 const DEFAULT_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 const DEFAULT_CODE_LENGTH = 6;
 
@@ -75,6 +76,66 @@ test.describe('Email OTP Required Flow', () => {
       await otpForm.enterCode('WRONG1');
 
       // Should still be on OTP page with error
+      await otpForm.expectVisible();
+      await otpForm.expectError();
+    });
+
+    test('empty OTP submission is rejected', async ({ page }) => {
+      const loginPage = new LoginPage(page);
+      const otpForm = new OtpForm(page);
+
+      await loginPage.goto(REALM);
+      await loginPage.login('user-with-role', TEST_PASSWORD);
+
+      await otpForm.expectVisible();
+      await mailpit.waitForMessage('user-with-role@test.local');
+
+      // Submit without entering any code
+      await otpForm.submitEmpty();
+
+      // Should still be on OTP page with error
+      await otpForm.expectVisible();
+      await otpForm.expectError();
+    });
+
+    test('OTP with leading/trailing whitespace is rejected', async ({ page }) => {
+      const loginPage = new LoginPage(page);
+      const otpForm = new OtpForm(page);
+
+      await loginPage.goto(REALM);
+      await loginPage.login('user-with-role', TEST_PASSWORD);
+
+      await otpForm.expectVisible();
+
+      const email = await mailpit.waitForMessage('user-with-role@test.local');
+      const code = mailpit.extractOtpCode(email);
+      expect(code).not.toBeNull();
+
+      // Enter code with whitespace
+      await otpForm.enterCode('  ' + code! + '  ');
+
+      // Should be rejected (whitespace not trimmed)
+      await otpForm.expectVisible();
+      await otpForm.expectError();
+    });
+
+    test('lowercase OTP code is rejected (case sensitive)', async ({ page }) => {
+      const loginPage = new LoginPage(page);
+      const otpForm = new OtpForm(page);
+
+      await loginPage.goto(REALM);
+      await loginPage.login('user-with-role', TEST_PASSWORD);
+
+      await otpForm.expectVisible();
+
+      const email = await mailpit.waitForMessage('user-with-role@test.local');
+      const code = mailpit.extractOtpCode(email);
+      expect(code).not.toBeNull();
+
+      // Enter lowercase version
+      await otpForm.enterCode(code!.toLowerCase());
+
+      // Should be rejected (case sensitive)
       await otpForm.expectVisible();
       await otpForm.expectError();
     });
@@ -192,5 +253,50 @@ test.describe('Email OTP Required Flow', () => {
       await otpForm.enterCode(code2!);
       await loginPage.expectLoggedIn();
     });
+  });
+});
+
+test.describe('OTP Expiration', () => {
+  test.beforeEach(async () => {
+    await mailpit.deleteAllMessages();
+  });
+
+  test('expired OTP code is rejected and new code is sent', async ({ page }) => {
+    const loginPage = new LoginPage(page);
+    const otpForm = new OtpForm(page);
+
+    await loginPage.goto(REALM_SHORT_TTL);
+    await loginPage.login('ttl-user', TEST_PASSWORD);
+
+    await otpForm.expectVisible();
+
+    // Get the OTP code
+    const email1 = await mailpit.waitForMessage('ttl-user@test.local');
+    const code1 = mailpit.extractOtpCode(email1);
+    expect(code1).not.toBeNull();
+
+    // Wait for the code to expire (TTL is 3 seconds, wait 4 to be safe)
+    await page.waitForTimeout(4000);
+
+    // Clear emails to detect new one
+    await mailpit.deleteAllMessages();
+
+    // Try to use the expired code
+    await otpForm.enterCode(code1!);
+
+    // Should show expiration error and remain on OTP page
+    await otpForm.expectVisible();
+    await otpForm.expectError();
+
+    // A new code should have been sent automatically
+    const email2 = await mailpit.waitForMessage('ttl-user@test.local');
+    const code2 = mailpit.extractOtpCode(email2);
+    expect(code2).not.toBeNull();
+    expect(code2).not.toBe(code1);
+
+    // New code should work
+    await otpForm.clearCode();
+    await otpForm.enterCode(code2!);
+    await loginPage.expectLoggedIn();
   });
 });

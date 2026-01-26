@@ -6,6 +6,7 @@ services:
     environment:
       KEYCLOAK_URL: http://keycloak:8080
       MAILPIT_URL: http://mailpit:8025
+      DATABASE_URL: postgres://keycloak:keycloak@postgres:5432/keycloak
       CI: true
     depends_on:
       keycloak:
@@ -23,7 +24,7 @@ services:
       KEYCLOAK_ADMIN_PASSWORD: admin
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
-      KC_HOSTNAME: localhost
+      KC_HOSTNAME: keycloak
       KC_HTTP_ENABLED: true
       KC_LOG_LEVEL: INFO,org.keycloak.cookie:ERROR
       KC_DB: postgres
