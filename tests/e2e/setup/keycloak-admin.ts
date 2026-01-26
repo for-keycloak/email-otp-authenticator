@@ -594,6 +594,67 @@ export class KeycloakAdmin {
     }
   }
 
+  async setUserLocale(
+    realmName: string,
+    userId: string,
+    locale: string
+  ): Promise<void> {
+    const getResponse = await this.request(`/${realmName}/users/${userId}`);
+    if (!getResponse.ok) {
+      throw new Error(`Failed to get user: ${getResponse.status}`);
+    }
+
+    const user = await getResponse.json();
+    const attributes = user.attributes || {};
+    attributes.locale = [locale];
+
+    const response = await this.request(`/${realmName}/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        ...user,
+        attributes,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to set user locale: ${response.status}`);
+    }
+  }
+
+  async enableInternationalization(
+    realmName: string,
+    locales: string[],
+    defaultLocale: string = 'en'
+  ): Promise<void> {
+    const response = await this.request(`/${realmName}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        realm: realmName,
+        internationalizationEnabled: true,
+        supportedLocales: locales,
+        defaultLocale: defaultLocale,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to enable internationalization: ${response.status}`);
+    }
+  }
+
+  async getUserByUsername(
+    realmName: string,
+    username: string
+  ): Promise<{ id: string; username: string } | null> {
+    const response = await this.request(
+      `/${realmName}/users?username=${username}&exact=true`
+    );
+    if (!response.ok) {
+      return null;
+    }
+    const users = await response.json();
+    return users.length > 0 ? users[0] : null;
+  }
+
   async deleteAuthenticationFlow(
     realmName: string,
     flowAlias: string
