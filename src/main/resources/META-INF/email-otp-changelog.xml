@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="email-otp-1.0" author="email-otp-authenticator">
+        <!-- Trusted IP table for IP-based rolling trust -->
+        <createTable tableName="EMAIL_OTP_TRUSTED_IP">
+            <column name="ID" type="VARCHAR(36)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="REALM_ID" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="USER_ID" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="IP_ADDRESS" type="VARCHAR(45)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="EXPIRES_AT" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="CREATED_AT" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint
+            tableName="EMAIL_OTP_TRUSTED_IP"
+            columnNames="REALM_ID, USER_ID, IP_ADDRESS"
+            constraintName="UK_EMAIL_OTP_TRUSTED_IP"/>
+
+        <createIndex tableName="EMAIL_OTP_TRUSTED_IP" indexName="IDX_TRUSTED_IP_EXPIRES">
+            <column name="EXPIRES_AT"/>
+        </createIndex>
+
+        <createIndex tableName="EMAIL_OTP_TRUSTED_IP" indexName="IDX_TRUSTED_IP_USER">
+            <column name="REALM_ID"/>
+            <column name="USER_ID"/>
+        </createIndex>
+
+        <!-- Trusted Device table for device-based permanent trust -->
+        <createTable tableName="EMAIL_OTP_TRUSTED_DEVICE">
+            <column name="ID" type="VARCHAR(36)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="REALM_ID" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="USER_ID" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="DEVICE_TOKEN" type="VARCHAR(36)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="EXPIRES_AT" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="CREATED_AT" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint
+            tableName="EMAIL_OTP_TRUSTED_DEVICE"
+            columnNames="REALM_ID, USER_ID, DEVICE_TOKEN"
+            constraintName="UK_EMAIL_OTP_TRUSTED_DEVICE"/>
+
+        <createIndex tableName="EMAIL_OTP_TRUSTED_DEVICE" indexName="IDX_TRUSTED_DEVICE_EXPIRES">
+            <column name="EXPIRES_AT"/>
+        </createIndex>
+
+        <createIndex tableName="EMAIL_OTP_TRUSTED_DEVICE" indexName="IDX_TRUSTED_DEVICE_USER">
+            <column name="REALM_ID"/>
+            <column name="USER_ID"/>
+        </createIndex>
+
+        <createIndex tableName="EMAIL_OTP_TRUSTED_DEVICE" indexName="IDX_TRUSTED_DEVICE_TOKEN">
+            <column name="REALM_ID"/>
+            <column name="DEVICE_TOKEN"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

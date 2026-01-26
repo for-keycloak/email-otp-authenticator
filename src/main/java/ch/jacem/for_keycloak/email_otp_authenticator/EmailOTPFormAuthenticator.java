@@ -1,20 +1,30 @@
 package ch.jacem.for_keycloak.email_otp_authenticator;
 
+import jakarta.ws.rs.core.Cookie;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.security.SecureRandom;
+import java.util.UUID;
 
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
 import org.keycloak.authentication.RequiredActionFactory;
 import org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAuthenticator;
+import org.keycloak.common.util.Base64Url;
+import org.keycloak.crypto.KeyUse;
+import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.email.EmailTemplateProvider;
 import org.keycloak.events.Errors;
 import org.keycloak.forms.login.LoginFormsProvider;
+import org.keycloak.jose.jws.Algorithm;
+import org.keycloak.jose.jws.crypto.HMACProvider;
+import org.keycloak.jose.jws.crypto.HashUtils;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
@@ -25,6 +35,8 @@ import org.keycloak.sessions.AuthenticationSessionModel;
 
 import ch.jacem.for_keycloak.email_otp_authenticator.authentication.authenticators.conditional.AcceptsFullContextInConfiguredFor;
 import ch.jacem.for_keycloak.email_otp_authenticator.helpers.ConfigHelper;
+import ch.jacem.for_keycloak.email_otp_authenticator.helpers.TrustDurationInfo;
+import ch.jacem.for_keycloak.email_otp_authenticator.trust.TrustStore;
 
 import org.jboss.logging.Logger;
 
@@ -36,9 +48,18 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
     public static final String OTP_FORM_TEMPLATE_NAME = "login-email-otp.ftl";
     public static final String OTP_FORM_CODE_INPUT_NAME = "email-otp";
     public static final String OTP_FORM_RESEND_ACTION_NAME = "resend-email";
+    public static final String OTP_FORM_TRUST_DEVICE_NAME = "trust-device";
 
     public static final String OTP_EMAIL_TEMPLATE_NAME = "otp-email.ftl";
     public static final String OTP_EMAIL_SUBJECT_KEY = "emailOtpSubject";
+
+    // Cookie name for device trust
+    public static final String DEVICE_TRUST_COOKIE_NAME = "EMAIL_OTP_DEVICE_TRUST";
+
+    // ACR values
+    public static final String ACR_EMAIL_OTP = "email-otp";
+    public static final String ACR_EMAIL_OTP_TRUSTED_DEVICE = "email-otp-trusted-device";
+    public static final String ACR_EMAIL_OTP_TRUSTED_IP = "email-otp-trusted-ip";
 
     private static final Logger logger = Logger.getLogger(EmailOTPFormAuthenticator.class);
 
@@ -72,7 +93,7 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
 
             // Reshow the form
             context.challenge(
-                this.challenge(context, null)
+                this.buildOtpForm(context, null, null)
             );
 
             return;
@@ -82,17 +103,20 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
 
         if (null == otp) {
             context.challenge(
-                this.challenge(context, null)
+                this.buildOtpForm(context, null, null)
             );
 
             return;
         }
 
-        if (otp.isEmpty() || !otp.equals(authenticationSession.getAuthNote(AUTH_NOTE_OTP_KEY))) {
+        String expectedOtp = authenticationSession.getAuthNote(AUTH_NOTE_OTP_KEY);
+        if (otp.isEmpty() || expectedOtp == null || !MessageDigest.isEqual(
+                otp.getBytes(StandardCharsets.UTF_8),
+                expectedOtp.getBytes(StandardCharsets.UTF_8))) {
             context.getEvent().user(user).error(Errors.INVALID_USER_CREDENTIALS);
             context.failureChallenge(
                 AuthenticationFlowError.INVALID_CREDENTIALS,
-                this.challenge(context, "errorInvalidEmailOtp", OTP_FORM_CODE_INPUT_NAME)
+                this.buildOtpForm(context, "errorInvalidEmailOtp", OTP_FORM_CODE_INPUT_NAME)
             );
 
             return;
@@ -106,7 +130,7 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
             context.getEvent().user(user).error(Errors.EXPIRED_CODE);
             context.failureChallenge(
                 AuthenticationFlowError.INVALID_CREDENTIALS,
-                this.challenge(context, "errorExpiredEmailOtp", OTP_FORM_CODE_INPUT_NAME)
+                this.buildOtpForm(context, "errorExpiredEmailOtp", OTP_FORM_CODE_INPUT_NAME)
             );
 
             return;
@@ -117,6 +141,12 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
         if (!authenticationSession.getAuthenticatedUser().isEmailVerified()) {
             authenticationSession.getAuthenticatedUser().setEmailVerified(true);
         }
+
+        // Store trust entries
+        storeTrustEntries(context, inputData);
+
+        // Set ACR for actual OTP entry
+        setAcr(context, ACR_EMAIL_OTP);
 
         context.success();
     }
@@ -135,11 +165,247 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
             return;
         }
 
+        UserModel user = context.getUser();
+        RealmModel realm = context.getRealm();
+
+        // Check if trust should be applied based on flow configuration
+        boolean shouldApplyTrust = shouldApplyTrust(context);
+
+        // Check device trust first (highest priority)
+        if (shouldApplyTrust && ConfigHelper.isDeviceTrustEnabled(context)) {
+            String signedToken = getDeviceTokenFromCookie(context);
+            if (signedToken != null) {
+                // Verify the signature and extract the original token
+                String deviceToken = verifyDeviceToken(context.getSession(), realm, signedToken);
+                if (deviceToken != null) {
+                    TrustStore trustStore = getTrustStore(context);
+                    if (trustStore != null && trustStore.isDeviceTrusted(realm, user, deviceToken)) {
+                        logger.debugf("Device is trusted for user %s, skipping OTP", user.getId());
+                        setAcr(context, ACR_EMAIL_OTP_TRUSTED_DEVICE);
+                        context.success();
+                        return;
+                    }
+                } else {
+                    logger.debug("Device token signature verification failed");
+                }
+            }
+        }
+
+        // Check IP trust (second priority)
+        if (shouldApplyTrust && ConfigHelper.isIpTrustEnabled(context)) {
+            String clientIp = getClientIpAddress(context);
+            if (clientIp != null) {
+                // Hash the IP for privacy-preserving lookup
+                String hashedIp = hashIpAddress(realm, clientIp);
+                TrustStore trustStore = getTrustStore(context);
+                if (trustStore != null && trustStore.isIpTrusted(realm, user, hashedIp)) {
+                    logger.debugf("IP is trusted for user %s, skipping OTP", user.getId());
+                    // Refresh the rolling expiration
+                    long newExpiresAt = (System.currentTimeMillis() / 1000) + ConfigHelper.getIpTrustDurationSeconds(context);
+                    trustStore.refreshIpTrust(realm, user, hashedIp, newExpiresAt);
+                    setAcr(context, ACR_EMAIL_OTP_TRUSTED_IP);
+                    context.success();
+                    return;
+                }
+            }
+        }
+
+        // No trust found, require OTP
         this.generateOtp(context, false);
 
         context.challenge(
-            this.challenge(context, null)
+            this.buildOtpForm(context, null, null)
         );
+    }
+
+    private void storeTrustEntries(AuthenticationFlowContext context, MultivaluedMap<String, String> inputData) {
+        UserModel user = context.getUser();
+        RealmModel realm = context.getRealm();
+        TrustStore trustStore = getTrustStore(context);
+
+        if (trustStore == null) {
+            logger.warn("TrustStore provider not available, cannot store trust entries");
+            return;
+        }
+
+        long now = System.currentTimeMillis() / 1000;
+
+        // Store IP trust if enabled
+        if (ConfigHelper.isIpTrustEnabled(context)) {
+            String clientIp = getClientIpAddress(context);
+            if (clientIp != null) {
+                // Hash IP for privacy-preserving storage
+                String hashedIp = hashIpAddress(realm, clientIp);
+                long expiresAt = now + ConfigHelper.getIpTrustDurationSeconds(context);
+                trustStore.trustIp(realm, user, hashedIp, expiresAt);
+                logger.debugf("Stored IP trust for user %s", user.getId());
+            }
+        }
+
+        // Store device trust if enabled AND checkbox was checked
+        if (ConfigHelper.isDeviceTrustEnabled(context)) {
+            String trustDevice = inputData.getFirst(OTP_FORM_TRUST_DEVICE_NAME);
+            if ("true".equals(trustDevice)) {
+                String deviceToken = UUID.randomUUID().toString();
+                long durationSeconds = ConfigHelper.getDeviceTrustDurationSeconds(context);
+                long expiresAt = (durationSeconds == 0) ? 0 : now + durationSeconds;
+
+                // Store the unsigned token in database
+                trustStore.trustDevice(realm, user, deviceToken, expiresAt);
+
+                // Sign the token before putting in cookie
+                String signedToken = signDeviceToken(context.getSession(), realm, deviceToken);
+                if (signedToken != null) {
+                    setDeviceTrustCookie(context, signedToken, durationSeconds);
+                } else {
+                    logger.warn("Could not sign device token, device trust cookie not set");
+                }
+                logger.debugf("Stored device trust for user %s", user.getId());
+            }
+        }
+    }
+
+    private TrustStore getTrustStore(AuthenticationFlowContext context) {
+        try {
+            return context.getSession().getProvider(TrustStore.class);
+        } catch (Exception e) {
+            logger.warn("Failed to get TrustStore provider", e);
+            return null;
+        }
+    }
+
+    private String getClientIpAddress(AuthenticationFlowContext context) {
+        // Use Keycloak's ClientConnection which respects proxy configuration
+        // (KC_PROXY=edge, KC_PROXY=passthrough, etc.)
+        try {
+            return context.getConnection().getRemoteAddr();
+        } catch (Exception e) {
+            logger.warn("Could not determine client IP address", e);
+            return null;
+        }
+    }
+
+    /**
+     * Hashes an IP address using SHA-256 with realm ID as salt.
+     * Uses Keycloak's HashUtils for the hash computation.
+     */
+    private String hashIpAddress(RealmModel realm, String ipAddress) {
+        if (ipAddress == null || ipAddress.isEmpty()) {
+            return null;
+        }
+        // Use realm ID as salt for domain separation
+        String saltedInput = realm.getId() + ":" + ipAddress;
+        return HashUtils.sha256UrlEncodedHash(saltedInput, StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Signs a device token using HMAC-SHA256 with Keycloak's managed key.
+     * Uses Keycloak's key management and HMACProvider for signing.
+     * Falls back to realm name as key material if no HMAC key is configured.
+     * Returns format: token.signature
+     */
+    private String signDeviceToken(KeycloakSession session, RealmModel realm, String token) {
+        try {
+            // Get the active HMAC key from Keycloak's key management
+            KeyWrapper key = session.keys().getActiveKey(realm, KeyUse.SIG, Algorithm.HS256.name());
+
+            byte[] signature;
+            if (key != null && key.getSecretKey() != null) {
+                signature = HMACProvider.sign(token.getBytes(StandardCharsets.UTF_8), Algorithm.HS256, key.getSecretKey());
+            } else {
+                // Fallback: use realm name as key material
+                logger.debug("No active HS256 key found, using realm name as fallback key");
+                byte[] fallbackKey = ("email-otp-device-trust:" + realm.getName()).getBytes(StandardCharsets.UTF_8);
+                signature = HMACProvider.sign(token.getBytes(StandardCharsets.UTF_8), Algorithm.HS256, fallbackKey);
+            }
+
+            return token + "." + Base64Url.encode(signature);
+        } catch (Exception e) {
+            logger.warn("Failed to sign device token", e);
+            return null;
+        }
+    }
+
+    /**
+     * Verifies a signed device token.
+     * Uses Keycloak's key management and HMACProvider for signature verification.
+     * Returns the original token if valid, null if invalid.
+     */
+    private String verifyDeviceToken(KeycloakSession session, RealmModel realm, String signedToken) {
+        if (signedToken == null || !signedToken.contains(".")) {
+            return null;
+        }
+
+        int separatorIndex = signedToken.lastIndexOf(".");
+        if (separatorIndex <= 0) {
+            return null;
+        }
+
+        String token = signedToken.substring(0, separatorIndex);
+        String providedSignature = signedToken.substring(separatorIndex + 1);
+
+        try {
+            // Re-sign and compare using constant-time comparison
+            String expectedSigned = signDeviceToken(session, realm, token);
+            if (expectedSigned == null) {
+                return null;
+            }
+            String expectedSignature = expectedSigned.substring(expectedSigned.lastIndexOf(".") + 1);
+
+            if (MessageDigest.isEqual(
+                    providedSignature.getBytes(StandardCharsets.UTF_8),
+                    expectedSignature.getBytes(StandardCharsets.UTF_8))) {
+                return token;
+            }
+        } catch (Exception e) {
+            logger.debug("Token verification failed", e);
+        }
+
+        return null;
+    }
+
+    private String getDeviceTokenFromCookie(AuthenticationFlowContext context) {
+        Map<String, Cookie> cookies = context.getHttpRequest().getHttpHeaders().getCookies();
+        if (cookies != null) {
+            Cookie cookie = cookies.get(DEVICE_TRUST_COOKIE_NAME);
+            if (cookie != null) {
+                return cookie.getValue();
+            }
+        }
+        return null;
+    }
+
+    private void setDeviceTrustCookie(AuthenticationFlowContext context, String deviceToken, long durationSeconds) {
+        // Calculate max age
+        int maxAge;
+        if (durationSeconds == 0) {
+            // Permanent: set to ~10 years
+            maxAge = 10 * 365 * 24 * 60 * 60;
+        } else {
+            maxAge = (int) durationSeconds;
+        }
+
+        // Determine if we should use secure cookies (HTTPS)
+        boolean secure = "https".equalsIgnoreCase(context.getUriInfo().getBaseUri().getScheme());
+
+        // Build the Set-Cookie header value manually for maximum compatibility
+        StringBuilder cookieBuilder = new StringBuilder();
+        cookieBuilder.append(DEVICE_TRUST_COOKIE_NAME).append("=").append(deviceToken);
+        cookieBuilder.append("; Path=/");
+        cookieBuilder.append("; Max-Age=").append(maxAge);
+        cookieBuilder.append("; HttpOnly");
+        cookieBuilder.append("; SameSite=Lax");
+        if (secure) {
+            cookieBuilder.append("; Secure");
+        }
+
+        // Add the cookie header to the response
+        context.getSession().getContext().getHttpResponse().addHeader("Set-Cookie", cookieBuilder.toString());
+        logger.debugf("Set device trust cookie for token %s with max-age %d", deviceToken, maxAge);
+    }
+
+    private void setAcr(AuthenticationFlowContext context, String acr) {
+        context.getAuthenticationSession().setAuthNote("acr", acr);
     }
 
     private boolean shouldRequireOtp(AuthenticationFlowContext context) {
@@ -161,6 +427,27 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
         return true;
     }
 
+    /**
+     * Determines if trust (IP/device) should be applied based on flow configuration.
+     * When "Trust Only When Sole Authenticator" is enabled (default), trust is skipped
+     * if this authenticator is configured as ALTERNATIVE (meaning there are other options).
+     */
+    private boolean shouldApplyTrust(AuthenticationFlowContext context) {
+        // If the setting is disabled, always apply trust
+        if (!ConfigHelper.isTrustOnlyWhenSole(context)) {
+            return true;
+        }
+
+        // If we're configured as ALTERNATIVE, don't apply trust
+        // because the user explicitly chose this method over alternatives
+        if (context.getExecution().isAlternative()) {
+            logger.debug("Trust skipped: authenticator is alternative and trust-only-when-sole is enabled");
+            return false;
+        }
+
+        return true;
+    }
+
     @Override
     public boolean requiresUser() {
         return true;
@@ -173,6 +460,41 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
 
     @Override
     protected Response createLoginForm(LoginFormsProvider form) {
+        return form.createForm(OTP_FORM_TEMPLATE_NAME);
+    }
+
+    private Response buildOtpForm(AuthenticationFlowContext context, String errorMessage, String field) {
+        LoginFormsProvider form = context.form();
+
+        if (errorMessage != null) {
+            if (field != null) {
+                form.addError(new org.keycloak.models.utils.FormMessage(field, errorMessage));
+            } else {
+                form.setError(errorMessage);
+            }
+        }
+
+        // Add device trust info to form if enabled
+        boolean deviceTrustEnabled = ConfigHelper.isDeviceTrustEnabled(context);
+        form.setAttribute("deviceTrustEnabled", deviceTrustEnabled);
+
+        if (deviceTrustEnabled) {
+            int trustDays = ConfigHelper.getDeviceTrustDurationDays(context);
+            boolean permanent = (trustDays == 0);
+            form.setAttribute("deviceTrustPermanent", permanent);
+
+            if (!permanent) {
+                TrustDurationInfo durationInfo = TrustDurationInfo.fromDays(trustDays);
+                if (durationInfo != null) {
+                    String lang = context.getSession().getContext().resolveLocale(context.getUser()).getLanguage();
+                    form.setAttribute("trustDurationValue", durationInfo.getValue());
+                    form.setAttribute("trustDurationUnitKey", durationInfo.getUnitMessageKey(lang));
+                    // In Arabic, hide the number when value is 1 (uses singular form without numeral)
+                    form.setAttribute("trustHideNumber", "ar".equals(lang) && durationInfo.getValue() == 1);
+                }
+            }
+        }
+
         return form.createForm(OTP_FORM_TEMPLATE_NAME);
     }
 
@@ -254,7 +576,7 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
             context.getEvent().user(context.getUser()).error(Errors.INVALID_USER_CREDENTIALS);
             context.failureChallenge(
                 AuthenticationFlowError.INTERNAL_ERROR,
-                this.challenge(context, Messages.INTERNAL_SERVER_ERROR, null)
+                this.buildOtpForm(context, Messages.INTERNAL_SERVER_ERROR, null)
             );
 
             return;
@@ -269,7 +591,7 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
             context.getEvent().user(user).error(Errors.INVALID_EMAIL);
             context.failureChallenge(
                 AuthenticationFlowError.INVALID_USER,
-                this.challenge(context, Messages.INVALID_EMAIL, null)
+                this.buildOtpForm(context, Messages.INVALID_EMAIL, null)
             );
 
             return;
@@ -299,7 +621,7 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
             context.getEvent().user(user).error(Errors.EMAIL_SEND_FAILED);
             context.failureChallenge(
                 AuthenticationFlowError.INTERNAL_ERROR,
-                this.challenge(context, Messages.EMAIL_SENT_ERROR, null)
+                this.buildOtpForm(context, Messages.EMAIL_SENT_ERROR, null)
             );
         }
     }

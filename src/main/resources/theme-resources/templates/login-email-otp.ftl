@@ -21,6 +21,30 @@
                 </div>
             </div>
 
+            <#if deviceTrustEnabled?? && deviceTrustEnabled>
+            <div class="${properties.kcFormGroupClass!}">
+                <div class="${properties.kcInputWrapperClass!}">
+                    <div class="${properties.kcCheckboxInputClass!}">
+                        <input type="checkbox" id="trust-device" name="trust-device" value="true" />
+                        <label for="trust-device" class="${properties.kcCheckboxLabelClass!}">
+                            <#if deviceTrustPermanent?? && deviceTrustPermanent>
+                                ${msg("dontAskForCodePermanently")}
+                            <#elseif trustDurationUnitKey??>
+                                <#assign unitStr = msg(trustDurationUnitKey)>
+                                <#if trustHideNumber?? && trustHideNumber>
+                                    ${msg("dontAskForCodeFor", "", unitStr)?trim}
+                                <#else>
+                                    ${msg("dontAskForCodeFor", trustDurationValue!1, unitStr)}
+                                </#if>
+                            <#else>
+                                ${msg("dontAskForCodePermanently")}
+                            </#if>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            </#if>
+
             <div class="${properties.kcFormGroupClass!}">
                 <div id="kc-form-buttons" class="${properties.kcFormButtonsClass!}">
                     <div class="${properties.kcFormButtonsWrapperClass!}">
