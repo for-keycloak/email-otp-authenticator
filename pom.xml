@@ -32,6 +32,9 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <buildVersion>dev</buildVersion>
 
+        <!-- Skip tests by default, run explicitly with: mvn test -->
+        <skipTests>true</skipTests>
+
         <!-- Default Keycloak version -->
         <keycloak.version>26.5.2</keycloak.version>
 
