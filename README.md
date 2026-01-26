@@ -9,6 +9,8 @@ A custom authentication SPI for Keycloak that provides an Email-based One-Time P
 - Configurable OTP code format (length and character set)
 - Configurable expiration time
 - Supports resending of codes
+- **IP Trust**: Automatically remember trusted IP addresses to skip OTP (rolling window)
+- **Device Trust**: User opt-in to remember trusted devices via cookie
 - Internationalization support for multiple languages
 - Compatible with multiple Keycloak versions
 
@@ -17,11 +19,69 @@ A custom authentication SPI for Keycloak that provides an Email-based One-Time P
 
 The authenticator provides the following configuration options:
 
+### Basic Settings
+
 - **User Role**: Only applies the authenticator to users with this role (default: `<null>`)
 - **Negate User Role**: Applies the authenticator to users without the selected role, inverting the condition (default: `false`)
 - **Code Length**: Length of the generated OTP code (default: `6`)
 - **Code Alphabet**: Characters used for generating the code (default: `23456789ABCDEFGHJKLMNPQRSTUVWXYZ`)
 - **Code Expiration**: Time in seconds before the code expires (default: `600` = 10 minutes)
+
+### IP Trust Settings
+
+- **Enable IP Trust**: If enabled, users won't be asked for OTP again from the same IP address within the trust duration (default: `false`)
+- **IP Trust Duration (minutes)**: The number of minutes an IP address remains trusted. Each successful login refreshes this window - this is a rolling expiration (default: `60` = 1 hour)
+
+### Device Trust Settings
+
+- **Enable Device Trust**: If enabled, users can opt-in to trust their device via a checkbox on the OTP form (default: `false`)
+- **Device Trust Duration (days)**: The number of days a device remains trusted. Set to `0` for permanent trust (default: `365` = 1 year)
+
+### Trust Behavior Settings
+
+- **Trust Only When Sole Authenticator**: If enabled, IP/device trust only applies when email OTP is the only authenticator (not alternative with other methods). When disabled, trust applies regardless of flow configuration (default: `true`)
+
+
+## How Trust Features Work
+
+### IP Trust (Rolling Window)
+
+When IP Trust is enabled, the authenticator remembers which IP addresses have successfully completed OTP verification. On subsequent logins from the same IP within the trust duration, OTP is skipped automatically.
+
+**Key characteristics:**
+- **Automatic**: No user action required
+- **Rolling expiration**: Each successful login (with or without OTP) refreshes the trust window
+- **Network-wide**: Works across all devices on the same network/IP
+
+**Example with 60-minute duration:**
+
+| Time | IP | Trust State | Action | New Expiration |
+|------|-----|-------------|--------|----------------|
+| 09:00 | 192.168.1.1 | None | OTP required ✓ | 10:00 |
+| 09:45 | 192.168.1.1 | Valid | OTP skipped | 10:45 |
+| 10:30 | 192.168.1.1 | Valid | OTP skipped | 11:30 |
+| 11:35 | 192.168.1.1 | Expired | OTP required ✓ | 12:35 |
+
+### Device Trust (User Opt-in)
+
+When Device Trust is enabled, a checkbox appears on the OTP form allowing users to remember their device. If checked, a secure cookie is stored, and future logins from that device/browser skip OTP.
+
+**Key characteristics:**
+- **Opt-in**: User must explicitly check the checkbox
+- **Device-specific**: Uses a secure cookie (HttpOnly, Secure, SameSite=Lax)
+- **Priority**: Device trust takes priority over IP trust when both are enabled
+
+### ACR (Authentication Context Class Reference) Values
+
+The authenticator sets different ACR values based on how authentication was completed:
+
+| ACR Value | Description |
+|-----------|-------------|
+| `email-otp` | User entered a valid OTP code |
+| `email-otp-trusted-ip` | OTP was skipped due to trusted IP |
+| `email-otp-trusted-device` | OTP was skipped due to trusted device |
+
+These ACR values can be used by applications to understand the authentication strength and make authorization decisions accordingly.
 
 
 ## Installation

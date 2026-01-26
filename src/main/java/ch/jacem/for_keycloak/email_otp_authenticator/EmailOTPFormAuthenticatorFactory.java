@@ -26,6 +26,22 @@ public class EmailOTPFormAuthenticatorFactory implements AuthenticatorFactory {
     public static final String SETTINGS_KEY_CODE_LIFETIME = "code-lifetime";
     public static final int SETTINGS_DEFAULT_VALUE_CODE_LIFETIME = 600; // 10 minutes
 
+    // IP Trust settings
+    public static final String SETTINGS_KEY_IP_TRUST_ENABLED = "ip-trust-enabled";
+    public static final boolean SETTINGS_DEFAULT_VALUE_IP_TRUST_ENABLED = false;
+    public static final String SETTINGS_KEY_IP_TRUST_DURATION = "ip-trust-duration";
+    public static final int SETTINGS_DEFAULT_VALUE_IP_TRUST_DURATION = 60; // 60 minutes
+
+    // Device Trust settings
+    public static final String SETTINGS_KEY_DEVICE_TRUST_ENABLED = "device-trust-enabled";
+    public static final boolean SETTINGS_DEFAULT_VALUE_DEVICE_TRUST_ENABLED = false;
+    public static final String SETTINGS_KEY_DEVICE_TRUST_DURATION = "device-trust-duration";
+    public static final int SETTINGS_DEFAULT_VALUE_DEVICE_TRUST_DURATION = 365; // 365 days (1 year)
+
+    // Trust behavior settings
+    public static final String SETTINGS_KEY_TRUST_ONLY_WHEN_SOLE = "trust-only-when-sole";
+    public static final boolean SETTINGS_DEFAULT_VALUE_TRUST_ONLY_WHEN_SOLE = true;
+
     @Override
     public Authenticator create(KeycloakSession session) {
         return SINGLETON;
@@ -114,6 +130,44 @@ public class EmailOTPFormAuthenticatorFactory implements AuthenticatorFactory {
                 // Using STRING_TYPE to keep compatibility with older versions of Keycloak, need to cast this to int
                 ProviderConfigProperty.STRING_TYPE,
                 String.valueOf(SETTINGS_DEFAULT_VALUE_CODE_LIFETIME)
+            ),
+            // IP Trust settings
+            new ProviderConfigProperty(
+                SETTINGS_KEY_IP_TRUST_ENABLED,
+                "Enable IP Trust",
+                "If enabled, users won't be asked for OTP again from the same IP address within the trust duration (rolling window).",
+                ProviderConfigProperty.BOOLEAN_TYPE,
+                String.valueOf(SETTINGS_DEFAULT_VALUE_IP_TRUST_ENABLED)
+            ),
+            new ProviderConfigProperty(
+                SETTINGS_KEY_IP_TRUST_DURATION,
+                "IP Trust Duration (minutes)",
+                "The number of minutes an IP address remains trusted. Each successful login refreshes this window (Default: 60 = 1 hour).",
+                ProviderConfigProperty.STRING_TYPE,
+                String.valueOf(SETTINGS_DEFAULT_VALUE_IP_TRUST_DURATION)
+            ),
+            // Device Trust settings
+            new ProviderConfigProperty(
+                SETTINGS_KEY_DEVICE_TRUST_ENABLED,
+                "Enable Device Trust",
+                "If enabled, users can opt-in to trust their device via a checkbox on the OTP form.",
+                ProviderConfigProperty.BOOLEAN_TYPE,
+                String.valueOf(SETTINGS_DEFAULT_VALUE_DEVICE_TRUST_ENABLED)
+            ),
+            new ProviderConfigProperty(
+                SETTINGS_KEY_DEVICE_TRUST_DURATION,
+                "Device Trust Duration (days)",
+                "The number of days a device remains trusted. Set to 0 for permanent trust (Default: 365 = 1 year).",
+                ProviderConfigProperty.STRING_TYPE,
+                String.valueOf(SETTINGS_DEFAULT_VALUE_DEVICE_TRUST_DURATION)
+            ),
+            // Trust behavior settings
+            new ProviderConfigProperty(
+                SETTINGS_KEY_TRUST_ONLY_WHEN_SOLE,
+                "Trust Only When Sole Authenticator",
+                "If enabled, IP/device trust only applies when email OTP is the only authenticator (not alternative with other methods). When disabled, trust applies regardless of flow configuration.",
+                ProviderConfigProperty.BOOLEAN_TYPE,
+                String.valueOf(SETTINGS_DEFAULT_VALUE_TRUST_ONLY_WHEN_SOLE)
             )
         );
     }

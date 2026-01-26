@@ -67,6 +67,91 @@ public class ConfigHelper {
         return ConfigHelper.getOtpCodeLength(context.getAuthenticatorConfig());
     }
 
+    // IP Trust settings
+
+    public static boolean isIpTrustEnabled(AuthenticatorConfigModel config) {
+        return ConfigHelper.getConfigBooleanValue(
+            config,
+            EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_IP_TRUST_ENABLED,
+            EmailOTPFormAuthenticatorFactory.SETTINGS_DEFAULT_VALUE_IP_TRUST_ENABLED
+        );
+    }
+
+    public static boolean isIpTrustEnabled(AuthenticationFlowContext context) {
+        return ConfigHelper.isIpTrustEnabled(context.getAuthenticatorConfig());
+    }
+
+    public static int getIpTrustDurationMinutes(AuthenticatorConfigModel config) {
+        return ConfigHelper.getConfigIntValue(
+            config,
+            EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_IP_TRUST_DURATION,
+            EmailOTPFormAuthenticatorFactory.SETTINGS_DEFAULT_VALUE_IP_TRUST_DURATION
+        );
+    }
+
+    public static int getIpTrustDurationMinutes(AuthenticationFlowContext context) {
+        return ConfigHelper.getIpTrustDurationMinutes(context.getAuthenticatorConfig());
+    }
+
+    /**
+     * Get IP trust duration in seconds.
+     */
+    public static long getIpTrustDurationSeconds(AuthenticationFlowContext context) {
+        return getIpTrustDurationMinutes(context) * 60L;
+    }
+
+    // Device Trust settings
+
+    public static boolean isDeviceTrustEnabled(AuthenticatorConfigModel config) {
+        return ConfigHelper.getConfigBooleanValue(
+            config,
+            EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_DEVICE_TRUST_ENABLED,
+            EmailOTPFormAuthenticatorFactory.SETTINGS_DEFAULT_VALUE_DEVICE_TRUST_ENABLED
+        );
+    }
+
+    public static boolean isDeviceTrustEnabled(AuthenticationFlowContext context) {
+        return ConfigHelper.isDeviceTrustEnabled(context.getAuthenticatorConfig());
+    }
+
+    public static int getDeviceTrustDurationDays(AuthenticatorConfigModel config) {
+        return ConfigHelper.getConfigIntValue(
+            config,
+            EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_DEVICE_TRUST_DURATION,
+            EmailOTPFormAuthenticatorFactory.SETTINGS_DEFAULT_VALUE_DEVICE_TRUST_DURATION
+        );
+    }
+
+    public static int getDeviceTrustDurationDays(AuthenticationFlowContext context) {
+        return ConfigHelper.getDeviceTrustDurationDays(context.getAuthenticatorConfig());
+    }
+
+    /**
+     * Get device trust duration in seconds.
+     * Returns 0 if permanent (never expires).
+     */
+    public static long getDeviceTrustDurationSeconds(AuthenticationFlowContext context) {
+        int days = getDeviceTrustDurationDays(context);
+        if (days == 0) {
+            return 0; // permanent
+        }
+        return days * 86400L; // days to seconds
+    }
+
+    // Trust behavior settings
+
+    public static boolean isTrustOnlyWhenSole(AuthenticatorConfigModel config) {
+        return ConfigHelper.getConfigBooleanValue(
+            config,
+            EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_TRUST_ONLY_WHEN_SOLE,
+            EmailOTPFormAuthenticatorFactory.SETTINGS_DEFAULT_VALUE_TRUST_ONLY_WHEN_SOLE
+        );
+    }
+
+    public static boolean isTrustOnlyWhenSole(AuthenticationFlowContext context) {
+        return ConfigHelper.isTrustOnlyWhenSole(context.getAuthenticatorConfig());
+    }
+
     public static String getConfigStringValue(AuthenticatorConfigModel config, String key) {
         return getConfigStringValue(config, key, null);
     }
