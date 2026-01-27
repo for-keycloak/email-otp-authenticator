@@ -6,7 +6,10 @@ import jakarta.ws.rs.core.Response;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.security.SecureRandom;
+import java.security.Signature;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,7 +26,6 @@ import org.keycloak.email.EmailTemplateProvider;
 import org.keycloak.events.Errors;
 import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.jose.jws.Algorithm;
-import org.keycloak.jose.jws.crypto.HMACProvider;
 import org.keycloak.jose.jws.crypto.HashUtils;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakSession;
@@ -299,27 +301,28 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
     }
 
     /**
-     * Signs a device token using HMAC-SHA256 with Keycloak's managed key.
-     * Uses Keycloak's key management and HMACProvider for signing.
-     * Falls back to realm name as key material if no HMAC key is configured.
+     * Signs a device token using RSA-SHA256 with Keycloak's managed key.
+     * Uses Keycloak's key management for signing. RS256 keys are always
+     * available in Keycloak realms (used for JWT signing).
      * Returns format: token.signature
      */
     private String signDeviceToken(KeycloakSession session, RealmModel realm, String token) {
         try {
-            // Get the active HMAC key from Keycloak's key management
-            KeyWrapper key = session.keys().getActiveKey(realm, KeyUse.SIG, Algorithm.HS256.name());
+            // Get the active RS256 key from Keycloak's key management (always available)
+            KeyWrapper key = session.keys().getActiveKey(realm, KeyUse.SIG, Algorithm.RS256.name());
 
-            byte[] signature;
-            if (key != null && key.getSecretKey() != null) {
-                signature = HMACProvider.sign(token.getBytes(StandardCharsets.UTF_8), Algorithm.HS256, key.getSecretKey());
-            } else {
-                // Fallback: use realm name as key material
-                logger.debug("No active HS256 key found, using realm name as fallback key");
-                byte[] fallbackKey = ("email-otp-device-trust:" + realm.getName()).getBytes(StandardCharsets.UTF_8);
-                signature = HMACProvider.sign(token.getBytes(StandardCharsets.UTF_8), Algorithm.HS256, fallbackKey);
+            if (key == null || key.getPrivateKey() == null) {
+                logger.error("No RS256 signing key available in realm - this should not happen");
+                return null;
             }
 
-            return token + "." + Base64Url.encode(signature);
+            // Sign using RSA-SHA256
+            Signature signature = Signature.getInstance("SHA256withRSA");
+            signature.initSign((PrivateKey) key.getPrivateKey());
+            signature.update(token.getBytes(StandardCharsets.UTF_8));
+            byte[] signatureBytes = signature.sign();
+
+            return token + "." + Base64Url.encode(signatureBytes);
         } catch (Exception e) {
             logger.warn("Failed to sign device token", e);
             return null;
@@ -327,8 +330,9 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
     }
 
     /**
-     * Verifies a signed device token.
-     * Uses Keycloak's key management and HMACProvider for signature verification.
+     * Verifies a signed device token using RSA-SHA256.
+     * Tries all available RS256 keys (active and passive) to handle key rotation -
+     * tokens signed with rotated keys can still be verified.
      * Returns the original token if valid, null if invalid.
      */
     private String verifyDeviceToken(KeycloakSession session, RealmModel realm, String signedToken) {
@@ -342,21 +346,39 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
         }
 
         String token = signedToken.substring(0, separatorIndex);
-        String providedSignature = signedToken.substring(separatorIndex + 1);
+        String signatureBase64 = signedToken.substring(separatorIndex + 1);
 
         try {
-            // Re-sign and compare using constant-time comparison
-            String expectedSigned = signDeviceToken(session, realm, token);
-            if (expectedSigned == null) {
+            byte[] signatureBytes = Base64Url.decode(signatureBase64);
+
+            // Get all RS256 keys (active and passive) for verification
+            // This handles key rotation - old tokens signed with rotated keys can still be verified
+            List<KeyWrapper> keys = session.keys().getKeysStream(realm, KeyUse.SIG, Algorithm.RS256.name())
+                .filter(k -> k.getStatus().isEnabled() && k.getPublicKey() != null)
+                .toList();
+
+            if (keys.isEmpty()) {
+                logger.error("No RS256 keys available for verification");
                 return null;
             }
-            String expectedSignature = expectedSigned.substring(expectedSigned.lastIndexOf(".") + 1);
 
-            if (MessageDigest.isEqual(
-                    providedSignature.getBytes(StandardCharsets.UTF_8),
-                    expectedSignature.getBytes(StandardCharsets.UTF_8))) {
-                return token;
+            // Try each key (handles key rotation)
+            for (KeyWrapper key : keys) {
+                try {
+                    Signature signature = Signature.getInstance("SHA256withRSA");
+                    signature.initVerify((PublicKey) key.getPublicKey());
+                    signature.update(token.getBytes(StandardCharsets.UTF_8));
+
+                    if (signature.verify(signatureBytes)) {
+                        return token;
+                    }
+                } catch (Exception e) {
+                    // Try next key
+                    logger.debugf("Verification with key %s failed, trying next", key.getKid());
+                }
             }
+
+            logger.debug("Device token signature verification failed - no matching key");
         } catch (Exception e) {
             logger.debug("Token verification failed", e);
         }
