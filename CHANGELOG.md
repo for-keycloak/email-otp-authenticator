@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.3.0](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.2.4...v1.3.0) (2026-01-27)
+
+
+### Features
+
+* **trust:** add IP and device trust to skip repeated OTP ([1f51527](https://github.com/for-keycloak/email-otp-authenticator/commit/1f51527491abb062b451c7e7c625e47ea1e34511))
+
+
+### Bug Fixes
+
+* **e2e:** accept both numerals formats across Keycloak versions ([94b0f31](https://github.com/for-keycloak/email-otp-authenticator/commit/94b0f31e744b4f9e7cb8ff606597a15da35aa712))
+
+
+### Tests
+
+* **trust:** add unit and e2e tests for trust features ([7f6583b](https://github.com/for-keycloak/email-otp-authenticator/commit/7f6583b818ec7c923d1cb0aa8bc08b63110e5f87))
+
+
+### Continuous Integration
+
+* **tests:** add parallel workflow for unit and e2e tests ([79e1279](https://github.com/for-keycloak/email-otp-authenticator/commit/79e1279181280038374b30a5408e5e4cd62c33db))
+
 ## [1.2.4](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.2.3...v1.2.4) (2026-01-25)
 
 
