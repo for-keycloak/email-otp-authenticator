@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.3.1](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.3.0...v1.3.1) (2026-01-27)
+
+
+### Dependencies
+
+* bump org.junit.jupiter:junit-jupiter from 5.11.4 to 6.0.2 ([f2f8872](https://github.com/for-keycloak/email-otp-authenticator/commit/f2f8872dbb9bea6712f364a24034b25218c24161))
+* bump postgres from 17.4 to 18.1 ([1882fe5](https://github.com/for-keycloak/email-otp-authenticator/commit/1882fe5cf694f6f5498b8e54701574d8efbace6c))
+* bump the minor-versions group with 2 updates ([b4128b6](https://github.com/for-keycloak/email-otp-authenticator/commit/b4128b64b6fd91d9a38e274855b508afa86588e3))
+
 ## [1.3.0](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.2.4...v1.3.0) (2026-01-27)
 
 
