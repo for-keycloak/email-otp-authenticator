@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.2](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.3.1...v1.3.2) (2026-02-03)
+
+
+### Dependencies
+
+* bump org.apache.maven.plugins:maven-compiler-plugin ([873d112](https://github.com/for-keycloak/email-otp-authenticator/commit/873d112d086a7c29cdb054f0d6d7a272bc7465a1))
+
 ## [1.3.1](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.3.0...v1.3.1) (2026-01-27)
 
 
