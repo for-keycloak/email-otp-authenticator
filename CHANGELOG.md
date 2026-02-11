@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.3](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.3.2...v1.3.3) (2026-02-11)
+
+
+### Miscellaneous Chores
+
+* **keycloak:** update default version references from 26.5.2 to 26.5.3 ([b4ee770](https://github.com/for-keycloak/email-otp-authenticator/commit/b4ee770cf02f2d98b65cb0c22fc86fbbe800c386))
+
+
+### Dependencies
+
+* bump keycloak/keycloak in the minor-versions group ([3f59a11](https://github.com/for-keycloak/email-otp-authenticator/commit/3f59a11c7f26df50f57350c3a015996097f9de00))
+* bump the minor-versions group with 5 updates ([dcaccb0](https://github.com/for-keycloak/email-otp-authenticator/commit/dcaccb0461302dbc535bf60c9aacc0f785d34016))
+
 ## [1.3.2](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.3.1...v1.3.2) (2026-02-03)
 
 
