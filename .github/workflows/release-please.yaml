@@ -33,7 +33,7 @@ jobs:
       fail-fast: false
       matrix:
         keycloak_version:
-          - keycloak-26.5.2
+          - keycloak-26.5.3
           - keycloak-26.4.7
           - keycloak-26.3.5
           - keycloak-26.2.5

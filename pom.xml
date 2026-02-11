@@ -58,8 +58,8 @@
     <!-- Profiles for different Keycloak versions -->
     <profiles>
         <profile>
-            <id>keycloak-26.5.2</id>
-            <properties><keycloak.version>26.5.2</keycloak.version></properties>
+            <id>keycloak-26.5.3</id>
+            <properties><keycloak.version>26.5.3</keycloak.version></properties>
             <activation><activeByDefault>true</activeByDefault></activation>
         </profile>
         <profile>
