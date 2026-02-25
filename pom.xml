@@ -36,7 +36,7 @@
         <skipTests>true</skipTests>
 
         <!-- Default Keycloak version -->
-        <keycloak.version>26.5.3</keycloak.version>
+        <keycloak.version>26.5.4</keycloak.version>
 
         <!-- Dependency versions -->
         <jakarta.ws.rs-api.version>4.0.0</jakarta.ws.rs-api.version>
@@ -58,8 +58,8 @@
     <!-- Profiles for different Keycloak versions -->
     <profiles>
         <profile>
-            <id>keycloak-26.5.3</id>
-            <properties><keycloak.version>26.5.3</keycloak.version></properties>
+            <id>keycloak-26.5.4</id>
+            <properties><keycloak.version>26.5.4</keycloak.version></properties>
             <activation><activeByDefault>true</activeByDefault></activation>
         </profile>
         <profile>
