@@ -31,7 +31,7 @@ services:
       - "1025:1025" # SMTP Server
 
   postgres:
-    image: postgres:18.1
+    image: postgres:18.2
     volumes:
       - postgres-data:/var/lib/postgresql/data
     environment:
