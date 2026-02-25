@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.4](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.3.3...v1.3.4) (2026-02-25)
+
+
+### Miscellaneous Chores
+
+* **keycloak:** update default version references from 26.5.3 to 26.5.4 ([7d91c22](https://github.com/for-keycloak/email-otp-authenticator/commit/7d91c22d9e672a17387dbafcb0fd52068db48088))
+
+
+### Dependencies
+
+* bump postgres in the minor-versions group across 1 directory ([b8e76a8](https://github.com/for-keycloak/email-otp-authenticator/commit/b8e76a86cacd8e80f0eba6b34586f33c69b240c5))
+* bump the minor-versions group across 1 directory with 2 updates ([04738ea](https://github.com/for-keycloak/email-otp-authenticator/commit/04738ea1a8abd36e4328c9ff4c9af114c7673f3a))
+
 ## [1.3.3](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.3.2...v1.3.3) (2026-02-11)
 
 
