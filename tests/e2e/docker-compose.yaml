@@ -18,7 +18,7 @@ services:
       - test
 
   keycloak:
-    image: quay.io/keycloak/keycloak:${KC_VERSION:-26.5.3}
+    image: quay.io/keycloak/keycloak:${KC_VERSION:-26.5.4}
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
@@ -35,7 +35,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ../../target/email-otp-authenticator-dev-kc-${KC_VERSION:-26.5.3}.jar:/opt/keycloak/providers/email-otp-authenticator.jar
+      - ../../target/email-otp-authenticator-dev-kc-${KC_VERSION:-26.5.4}.jar:/opt/keycloak/providers/email-otp-authenticator.jar
     command: start-dev
     depends_on:
       postgres:
