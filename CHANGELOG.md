@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.3.5](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.3.4...v1.3.5) (2026-03-03)
+
+
+### Dependencies
+
+* bump actions/upload-artifact from 6.0.0 to 7.0.0 ([4084174](https://github.com/for-keycloak/email-otp-authenticator/commit/40841745f89cd67dffff2f58d268774199bf5c82))
+* bump postgres from 18.2 to 18.3 in the minor-versions group ([b4f96f1](https://github.com/for-keycloak/email-otp-authenticator/commit/b4f96f1e16a8b07a1b8bc0d18866750cda7232a2))
+* bump the minor-versions group with 2 updates ([43f6c42](https://github.com/for-keycloak/email-otp-authenticator/commit/43f6c42f5afb387447e5cd89a7746c7344c52e7f))
+
 ## [1.3.4](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.3.3...v1.3.4) (2026-02-25)
 
 
