@@ -625,6 +625,9 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
             attributes.put("otp", otp);
             attributes.put("ttl", ttlSeconds);
             attributes.put("ttlMinutes", ttlSeconds / 60);
+            // Expose the realm so templates can read realm-level attributes
+            // (mirrors what login templates have access to).
+            attributes.put("realm", context.getRealm());
 
             context.getSession()
                 .getProvider(EmailTemplateProvider.class)

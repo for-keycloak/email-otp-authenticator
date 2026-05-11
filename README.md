@@ -84,6 +84,20 @@ The authenticator sets different ACR values based on how authentication was comp
 These ACR values can be used by applications to understand the authentication strength and make authorization decisions accordingly.
 
 
+## Customizing the OTP email template
+
+The plugin sends the OTP email through Keycloak's standard `EmailTemplateProvider` using the FreeMarker template `otp-email.ftl` (both `html/` and `text/` variants are supported). You can override these templates in your own email theme.
+
+The FreeMarker model exposes the following variables on top of what Keycloak adds by default (`user`, `realmName`, `url`, `msg`, `properties`, `locale`):
+
+| Variable | Type | Description |
+|----------|------|-------------|
+| `otp` | `String` | The generated one-time code |
+| `ttl` | `int` | Code lifetime in seconds |
+| `ttlMinutes` | `int` | Code lifetime in minutes (`ttl / 60`) |
+| `realm` | `RealmModel` | The current realm. Useful to read realm-level attributes for branding (e.g., `${realm.attributes['_brandPrimary']!'#000'}`), mirroring what login templates have access to. |
+
+
 ## Installation
 
 ### Option 1: Using Docker
