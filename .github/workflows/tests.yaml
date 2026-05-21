@@ -40,7 +40,8 @@ jobs:
           - '26.2.5'
           - '26.3.5'
           - '26.4.7'
-          - '26.5.4'
+          - '26.5.7'
+          - '26.6.2'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
