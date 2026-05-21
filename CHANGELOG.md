@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.4.0](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.3.5...v1.4.0) (2026-05-21)
+
+
+### Features
+
+* expose realm in the FreeMarker model for OTP email templates ([4077709](https://github.com/for-keycloak/email-otp-authenticator/commit/40777092864956731c436460172ac8e17ed50511))
+* **form:** expose email and maskedEmail attributes on the OTP form ([b0fc538](https://github.com/for-keycloak/email-otp-authenticator/commit/b0fc538c413af83ffb8cde06884066a451d78c51))
+
+
+### Miscellaneous Chores
+
+* **keycloak:** add 26.6.2 (default), 26.5.7; bump default from 26.5.4 ([ef67325](https://github.com/for-keycloak/email-otp-authenticator/commit/ef67325d43008108c6137015e2fa0e2bace09b39))
+
+
+### Dependencies
+
+* bump the minor-versions group across 1 directory with 2 updates ([5e8f006](https://github.com/for-keycloak/email-otp-authenticator/commit/5e8f006e04a2e70ef95d6e0e363ba0e12bd57fc8))
+* bump the minor-versions group across 1 directory with 5 updates ([35e8918](https://github.com/for-keycloak/email-otp-authenticator/commit/35e89182be4e6294b71b43a3e58fa3adfa40c67d))
+
 ## [1.3.5](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.3.4...v1.3.5) (2026-03-03)
 
 
