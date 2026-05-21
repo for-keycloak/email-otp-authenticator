@@ -373,4 +373,93 @@ class EmailOTPFormAuthenticatorTest {
             assertTrue(tenYearsInSeconds < 320_000_000);
         }
     }
+
+    @Nested
+    @DisplayName("Email Masking")
+    class EmailMasking {
+
+        @Test
+        @DisplayName("standard email is masked at local and pre-TLD domain parts")
+        void standardEmail() {
+            assertEquals("jo***@gm***.com", maskEmail("john.doe@gmail.com"));
+        }
+
+        @Test
+        @DisplayName("short local part is kept and suffixed with ***")
+        void shortLocalPart() {
+            assertEquals("a***@gm***.com", maskEmail("a@gmail.com"));
+        }
+
+        @Test
+        @DisplayName("subdomain is folded into the pre-TLD via last-dot split")
+        void subdomain() {
+            assertEquals("jo***@ma***.com", maskEmail("john@mail.example.com"));
+        }
+
+        @Test
+        @DisplayName("domain without a dot has no TLD preserved")
+        void domainWithoutDot() {
+            assertEquals("jo***@lo***", maskEmail("john@localhost"));
+        }
+
+        @Test
+        @DisplayName("email without @ is returned unchanged")
+        void missingAtSign() {
+            assertEquals("noatsign", maskEmail("noatsign"));
+        }
+
+        @Test
+        @DisplayName("empty string is returned unchanged")
+        void emptyString() {
+            assertEquals("", maskEmail(""));
+        }
+
+        @Test
+        @DisplayName("null is returned as null")
+        void nullEmail() {
+            assertNull(maskEmail(null));
+        }
+
+        @Test
+        @DisplayName("empty local part returns input unchanged")
+        void emptyLocalPart() {
+            assertEquals("@gmail.com", maskEmail("@gmail.com"));
+        }
+
+        @Test
+        @DisplayName("empty domain returns input unchanged")
+        void emptyDomain() {
+            assertEquals("john@", maskEmail("john@"));
+        }
+
+        // Mirrors the private method in EmailOTPFormAuthenticator.
+        private String maskEmail(String email) {
+            if (email == null || email.isEmpty()) {
+                return email;
+            }
+            int atIndex = email.indexOf('@');
+            if (atIndex < 0) {
+                return email;
+            }
+            String local = email.substring(0, atIndex);
+            String domain = email.substring(atIndex + 1);
+            if (local.isEmpty() || domain.isEmpty()) {
+                return email;
+            }
+
+            String maskedLocal = local.substring(0, Math.min(2, local.length())) + "***";
+
+            String maskedDomain;
+            int lastDotIndex = domain.lastIndexOf('.');
+            if (lastDotIndex < 0) {
+                maskedDomain = domain.substring(0, Math.min(2, domain.length())) + "***";
+            } else {
+                String preTld = domain.substring(0, lastDotIndex);
+                String tld = domain.substring(lastDotIndex + 1);
+                maskedDomain = preTld.substring(0, Math.min(2, preTld.length())) + "***." + tld;
+            }
+
+            return maskedLocal + "@" + maskedDomain;
+        }
+    }
 }

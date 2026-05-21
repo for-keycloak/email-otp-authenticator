@@ -98,6 +98,18 @@ The FreeMarker model exposes the following variables on top of what Keycloak add
 | `realm` | `RealmModel` | The current realm. Useful to read realm-level attributes for branding (e.g., `${realm.attributes['_brandPrimary']!'#000'}`), mirroring what login templates have access to. |
 
 
+## Customizing the OTP entry form
+
+The OTP entry form is rendered from the FreeMarker template `login-email-otp.ftl`. You can override it in your own login theme. On top of the standard Keycloak login template variables, the form receives:
+
+| Variable | Type | Description |
+|----------|------|-------------|
+| `email` | `String` | The recipient's email address. |
+| `maskedEmail` | `String` | The recipient's email with the local part and pre-TLD domain part masked, e.g. `jo***@gm***.com`. Useful for showing the destination on the form without leaking the full address. |
+
+Both are set only when the authenticated user has a non-empty email; templates should guard with FreeMarker defaults (e.g. `${maskedEmail!''}`) to stay safe.
+
+
 ## Installation
 
 ### Option 1: Using Docker

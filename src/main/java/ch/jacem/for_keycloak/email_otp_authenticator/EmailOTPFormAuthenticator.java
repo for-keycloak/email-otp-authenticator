@@ -496,6 +496,17 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
             }
         }
 
+        // Expose the recipient email and a masked variant so the form can
+        // show where the OTP was sent (e.g. "Code sent to jo***@gm***.com").
+        UserModel formUser = context.getUser();
+        if (formUser != null) {
+            String formEmail = formUser.getEmail();
+            if (formEmail != null && !formEmail.isEmpty()) {
+                form.setAttribute("email", formEmail);
+                form.setAttribute("maskedEmail", maskEmail(formEmail));
+            }
+        }
+
         // Add device trust info to form if enabled
         boolean deviceTrustEnabled = ConfigHelper.isDeviceTrustEnabled(context);
         form.setAttribute("deviceTrustEnabled", deviceTrustEnabled);
@@ -649,6 +660,43 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
                 this.buildOtpForm(context, Messages.EMAIL_SENT_ERROR, null)
             );
         }
+    }
+
+    /**
+     * Masks an email address for safe display in the OTP form. Keeps the first
+     * two characters of the local part and of the domain (excluding TLD),
+     * replacing the rest with "***". The TLD is preserved when the domain
+     * contains a dot. Example: "john.doe@gmail.com" -> "jo***@gm***.com".
+     * Malformed input (null, empty, missing "@", empty local or domain) is
+     * returned unchanged.
+     */
+    private static String maskEmail(String email) {
+        if (email == null || email.isEmpty()) {
+            return email;
+        }
+        int atIndex = email.indexOf('@');
+        if (atIndex < 0) {
+            return email;
+        }
+        String local = email.substring(0, atIndex);
+        String domain = email.substring(atIndex + 1);
+        if (local.isEmpty() || domain.isEmpty()) {
+            return email;
+        }
+
+        String maskedLocal = local.substring(0, Math.min(2, local.length())) + "***";
+
+        String maskedDomain;
+        int lastDotIndex = domain.lastIndexOf('.');
+        if (lastDotIndex < 0) {
+            maskedDomain = domain.substring(0, Math.min(2, domain.length())) + "***";
+        } else {
+            String preTld = domain.substring(0, lastDotIndex);
+            String tld = domain.substring(lastDotIndex + 1);
+            maskedDomain = preTld.substring(0, Math.min(2, preTld.length())) + "***." + tld;
+        }
+
+        return maskedLocal + "@" + maskedDomain;
     }
 
     private boolean isOtpExpired(AuthenticationFlowContext context) {
