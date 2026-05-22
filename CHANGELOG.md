@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.1](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.4.0...v1.4.1) (2026-05-22)
+
+
+### Dependencies
+
+* bump googleapis/release-please-action from 4.4.0 to 5.0.0 ([b122e01](https://github.com/for-keycloak/email-otp-authenticator/commit/b122e01d2f3a30513ec191eca17be98b207c3bc4))
+* bump sigstore/cosign-installer in the minor-versions group ([a931839](https://github.com/for-keycloak/email-otp-authenticator/commit/a9318396574ffab45be2575330db3d9f9c386a06))
+
 ## [1.4.0](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.3.5...v1.4.0) (2026-05-21)
 
 
