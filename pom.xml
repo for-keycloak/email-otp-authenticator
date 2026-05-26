@@ -51,7 +51,7 @@
         <maven-jar-plugin.version>3.5.0</maven-jar-plugin.version>
         <maven-install-plugin.version>3.1.4</maven-install-plugin.version>
         <maven-deploy-plugin.version>3.1.4</maven-deploy-plugin.version>
-        <maven-site-plugin.version>3.21.0</maven-site-plugin.version>
+        <maven-site-plugin.version>3.22.0</maven-site-plugin.version>
         <maven-project-info-reports-plugin.version>3.9.0</maven-project-info-reports-plugin.version>
     </properties>
 
