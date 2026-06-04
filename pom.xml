@@ -36,7 +36,7 @@
         <skipTests>true</skipTests>
 
         <!-- Default Keycloak version -->
-        <keycloak.version>26.6.2</keycloak.version>
+        <keycloak.version>26.6.3</keycloak.version>
 
         <!-- Dependency versions -->
         <jakarta.ws.rs-api.version>4.0.0</jakarta.ws.rs-api.version>
@@ -47,7 +47,7 @@
         <maven-clean-plugin.version>3.5.0</maven-clean-plugin.version>
         <maven-resources-plugin.version>3.5.0</maven-resources-plugin.version>
         <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
-        <maven-surefire-plugin.version>3.5.5</maven-surefire-plugin.version>
+        <maven-surefire-plugin.version>3.5.6</maven-surefire-plugin.version>
         <maven-jar-plugin.version>3.5.0</maven-jar-plugin.version>
         <maven-install-plugin.version>3.1.4</maven-install-plugin.version>
         <maven-deploy-plugin.version>3.1.4</maven-deploy-plugin.version>
