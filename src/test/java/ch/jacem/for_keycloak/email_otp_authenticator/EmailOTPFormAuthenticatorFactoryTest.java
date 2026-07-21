@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.models.AuthenticationExecutionModel.Requirement;
+import org.keycloak.models.credential.OTPCredentialModel;
 import org.keycloak.provider.ProviderConfigProperty;
 
 @DisplayName("EmailOTPFormAuthenticatorFactory")
@@ -39,9 +40,9 @@ class EmailOTPFormAuthenticatorFactoryTest {
         }
 
         @Test
-        @DisplayName("getReferenceCategory returns otp-over-email")
+        @DisplayName("getReferenceCategory returns the otp credential type")
         void getReferenceCategory() {
-            assertEquals("otp-over-email", factory.getReferenceCategory());
+            assertEquals(OTPCredentialModel.TYPE, factory.getReferenceCategory());
         }
 
         @Test

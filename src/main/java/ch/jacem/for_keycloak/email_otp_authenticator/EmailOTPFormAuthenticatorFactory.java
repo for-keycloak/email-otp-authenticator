@@ -9,6 +9,7 @@ import org.keycloak.authentication.AuthenticatorFactory;
 import org.keycloak.models.AuthenticationExecutionModel.Requirement;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
+import org.keycloak.models.credential.OTPCredentialModel;
 import org.keycloak.provider.ProviderConfigProperty;
 
 public class EmailOTPFormAuthenticatorFactory implements AuthenticatorFactory {
@@ -63,7 +64,11 @@ public class EmailOTPFormAuthenticatorFactory implements AuthenticatorFactory {
 
     @Override
     public String getReferenceCategory() {
-        return "otp-over-email";
+        // Must be one of the categories Keycloak's DefaultBruteForceProtector
+        // accepts (ALLOWED_AUTHENTICATION_CATEGORIES); otherwise failed OTP
+        // submissions are never counted and brute-force protection stays
+        // disengaged.
+        return OTPCredentialModel.TYPE;
     }
 
     @Override
