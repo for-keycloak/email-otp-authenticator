@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.4.3](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.4.2...v1.4.3) (2026-07-21)
+
+
+### Bug Fixes
+
+* report the otp reference category to engage brute-force protection ([1eae2ec](https://github.com/for-keycloak/email-otp-authenticator/commit/1eae2ecf2c4550fd71a139582be9737e6b2f23bc)), closes [#85](https://github.com/for-keycloak/email-otp-authenticator/issues/85)
+
+
+### Dependencies
+
+* bump actions/setup-java ([2940553](https://github.com/for-keycloak/email-otp-authenticator/commit/294055368f4b5cb5826323f75baf8286a75895f1))
+
+
+### Tests
+
+* **brute-force:** assert reference category against allow-list only on Keycloak 26.6+ ([cc16802](https://github.com/for-keycloak/email-otp-authenticator/commit/cc1680286d5b7041d1b87bf1fc4b550f599f5b1a))
+* cover brute-force failure counting and lockout for failed OTP attempts ([1deff15](https://github.com/for-keycloak/email-otp-authenticator/commit/1deff152de5d434f13ab4ce03ecc165a0f0ef4f8))
+
 ## [1.4.2](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.4.1...v1.4.2) (2026-05-26)
 
 
