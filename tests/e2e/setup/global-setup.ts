@@ -4,6 +4,7 @@ import { setupTotpViaUI, closeBrowser, cleanupSecrets } from './totp-setup.js';
 
 const TEST_PASSWORD = 'testpassword';
 const OTP_ROLE = 'otp-required';
+const BRUTE_FORCE_FAILURE_FACTOR = 3;
 
 export default async function globalSetup() {
   try {
@@ -17,6 +18,7 @@ export default async function globalSetup() {
     await setupTrustWithAlternativesRealm();
     await setupShortTtlRealm();
     await setupI18nRealm();
+    await setupBruteForceRealm();
   } finally {
     await closeBrowser();
   }
@@ -646,4 +648,44 @@ async function setupI18nFlow(realmName: string) {
   await keycloakAdmin.bindBrowserFlow(realmName, flowAlias);
 }
 
-export { TEST_PASSWORD, OTP_ROLE };
+async function setupBruteForceRealm() {
+  const realmName = 'test-brute-force';
+
+  if (await keycloakAdmin.realmExists(realmName)) {
+    await keycloakAdmin.deleteRealm(realmName);
+  }
+
+  await keycloakAdmin.createRealm(realmName, {
+    bruteForceProtected: true,
+    failureFactor: BRUTE_FORCE_FAILURE_FACTOR,
+    waitIncrementSeconds: 60,
+    maxFailureWaitSeconds: 900,
+    maxDeltaTimeSeconds: 43200,
+    // Rapid test submissions must not trip the quick-login guard before
+    // failureFactor distinct failures have been counted
+    quickLoginCheckMilliSeconds: 0,
+  });
+  await keycloakAdmin.configureSmtp(realmName);
+  await keycloakAdmin.createTestClient(realmName);
+  await keycloakAdmin.createRole(realmName, OTP_ROLE);
+
+  const counterUserId = await keycloakAdmin.createUser(
+    realmName,
+    'counter-user',
+    'counter-user@test.local',
+    TEST_PASSWORD
+  );
+  await keycloakAdmin.assignRoleToUser(realmName, counterUserId, OTP_ROLE);
+
+  const lockoutUserId = await keycloakAdmin.createUser(
+    realmName,
+    'lockout-user',
+    'lockout-user@test.local',
+    TEST_PASSWORD
+  );
+  await keycloakAdmin.assignRoleToUser(realmName, lockoutUserId, OTP_ROLE);
+
+  await setupRequiredFlow(realmName);
+}
+
+export { TEST_PASSWORD, OTP_ROLE, BRUTE_FORCE_FAILURE_FACTOR };

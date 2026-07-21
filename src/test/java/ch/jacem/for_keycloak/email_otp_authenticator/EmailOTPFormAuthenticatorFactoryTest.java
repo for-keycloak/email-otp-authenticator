@@ -12,6 +12,7 @@ import org.keycloak.authentication.Authenticator;
 import org.keycloak.models.AuthenticationExecutionModel.Requirement;
 import org.keycloak.models.credential.OTPCredentialModel;
 import org.keycloak.provider.ProviderConfigProperty;
+import org.keycloak.services.managers.DefaultBruteForceProtector;
 
 @DisplayName("EmailOTPFormAuthenticatorFactory")
 class EmailOTPFormAuthenticatorFactoryTest {
@@ -43,6 +44,13 @@ class EmailOTPFormAuthenticatorFactoryTest {
         @DisplayName("getReferenceCategory returns the otp credential type")
         void getReferenceCategory() {
             assertEquals(OTPCredentialModel.TYPE, factory.getReferenceCategory());
+        }
+
+        @Test
+        @DisplayName("getReferenceCategory is counted by Keycloak's brute-force protection")
+        void getReferenceCategoryIsAllowedForBruteForce() {
+            assertTrue(DefaultBruteForceProtector.ALLOWED_AUTHENTICATION_CATEGORIES
+                .contains(factory.getReferenceCategory()));
         }
 
         @Test

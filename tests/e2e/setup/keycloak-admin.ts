@@ -85,7 +85,7 @@ export class KeycloakAdmin {
     await this.request(`/${realmName}`, { method: 'DELETE' });
   }
 
-  async createRealm(realmName: string): Promise<void> {
+  async createRealm(realmName: string, overrides: Record<string, unknown> = {}): Promise<void> {
     const response = await this.request('', {
       method: 'POST',
       body: JSON.stringify({
@@ -99,6 +99,7 @@ export class KeycloakAdmin {
         bruteForceProtected: false,
         // Disable default required actions that could interfere with tests
         requiredActions: [],
+        ...overrides,
       }),
     });
 
@@ -653,6 +654,29 @@ export class KeycloakAdmin {
     }
     const users = await response.json();
     return users.length > 0 ? users[0] : null;
+  }
+
+  async getBruteForceStatus(
+    realmName: string,
+    userId: string
+  ): Promise<{ numFailures: number; disabled: boolean }> {
+    const response = await this.request(
+      `/${realmName}/attack-detection/brute-force/users/${userId}`
+    );
+    if (!response.ok) {
+      throw new Error(`Failed to get brute-force status: ${response.status}`);
+    }
+    return response.json();
+  }
+
+  async clearBruteForceStatus(realmName: string, userId: string): Promise<void> {
+    const response = await this.request(
+      `/${realmName}/attack-detection/brute-force/users/${userId}`,
+      { method: 'DELETE' }
+    );
+    if (!response.ok) {
+      throw new Error(`Failed to clear brute-force status: ${response.status}`);
+    }
   }
 
   async deleteAuthenticationFlow(
