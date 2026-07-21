@@ -53,6 +53,7 @@
         <maven-deploy-plugin.version>3.1.4</maven-deploy-plugin.version>
         <maven-site-plugin.version>3.22.0</maven-site-plugin.version>
         <maven-project-info-reports-plugin.version>3.9.0</maven-project-info-reports-plugin.version>
+        <build-helper-maven-plugin.version>3.6.0</build-helper-maven-plugin.version>
     </properties>
 
     <!-- Profiles for different Keycloak versions -->
@@ -61,6 +62,30 @@
             <id>keycloak-26.6.2</id>
             <properties><keycloak.version>26.6.2</keycloak.version></properties>
             <activation><activeByDefault>true</activeByDefault></activation>
+            <!-- Tests that depend on Keycloak 26.6+ APIs (e.g. DefaultBruteForceProtector.ALLOWED_AUTHENTICATION_CATEGORIES) live here and are only compiled on 26.6+ builds. -->
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>build-helper-maven-plugin</artifactId>
+                        <version>${build-helper-maven-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>add-kc26_6-test-source</id>
+                                <phase>generate-test-sources</phase>
+                                <goals>
+                                    <goal>add-test-source</goal>
+                                </goals>
+                                <configuration>
+                                    <sources>
+                                        <source>src/test/java-kc26_6</source>
+                                    </sources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
         </profile>
         <profile>
             <id>keycloak-26.5.7</id>

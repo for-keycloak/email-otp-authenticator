@@ -12,7 +12,6 @@ import org.keycloak.authentication.Authenticator;
 import org.keycloak.models.AuthenticationExecutionModel.Requirement;
 import org.keycloak.models.credential.OTPCredentialModel;
 import org.keycloak.provider.ProviderConfigProperty;
-import org.keycloak.services.managers.DefaultBruteForceProtector;
 
 @DisplayName("EmailOTPFormAuthenticatorFactory")
 class EmailOTPFormAuthenticatorFactoryTest {
@@ -49,8 +48,7 @@ class EmailOTPFormAuthenticatorFactoryTest {
         @Test
         @DisplayName("getReferenceCategory is counted by Keycloak's brute-force protection")
         void getReferenceCategoryIsAllowedForBruteForce() {
-            assertTrue(DefaultBruteForceProtector.ALLOWED_AUTHENTICATION_CATEGORIES
-                .contains(factory.getReferenceCategory()));
+            assertEquals("otp", factory.getReferenceCategory()); // value from DefaultBruteForceProtector.ALLOWED_AUTHENTICATION_CATEGORIES, not referenced directly because that constant only exists in Keycloak 26.6+ and we build against all supported versions (26.2.5+)
         }
 
         @Test
