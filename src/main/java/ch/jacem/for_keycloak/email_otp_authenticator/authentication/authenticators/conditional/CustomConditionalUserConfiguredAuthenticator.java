@@ -67,8 +67,12 @@ public class CustomConditionalUserConfiguredAuthenticator extends ConditionalUse
             return ((AcceptsFullContextInConfiguredFor) authenticator).configuredFor(context, config);
         }
 
-        // Guard against null user - can happen before authentication completes
-        if (context.getUser() == null) {
+        // Guard against null user - only when the authenticator actually requires one,
+        // matching Keycloak's built-in ConditionalUserConfiguredAuthenticator. Authenticators
+        // designed to run before a user is identified (e.g. the Organization Identity-First
+        // Login) must still be evaluated, otherwise conditional subflows wrapping them are
+        // silently disabled at first render.
+        if (authenticator.requiresUser() && context.getUser() == null) {
             return false;
         }
 
