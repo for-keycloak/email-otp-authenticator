@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.5.0](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.4.3...v1.5.0) (2026-09-03)
+
+
+### Features
+
+* **keycloak:** add 26.7.2 (default); bump default from 26.6.2 ([db8b7a6](https://github.com/for-keycloak/email-otp-authenticator/commit/db8b7a6c13334842198059c63e8347250d01b899)), closes [#103](https://github.com/for-keycloak/email-otp-authenticator/issues/103)
+
+
+### Bug Fixes
+
+* **conditional:** only guard against null user when the authenticator requires one ([cc86317](https://github.com/for-keycloak/email-otp-authenticator/commit/cc86317e164b5d0f6a173be112b0baa17ea5af4e)), closes [#102](https://github.com/for-keycloak/email-otp-authenticator/issues/102)
+
+
+### Miscellaneous Chores
+
+* **keycloak:** bump 26.7.2 -&gt; 26.7.3 (20 CVE fixes released 2026-08-31) ([ec7b5ea](https://github.com/for-keycloak/email-otp-authenticator/commit/ec7b5ead3e2e3f202d9f348d06c9a7bad6339492))
+
 ## [1.4.3](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.4.2...v1.4.3) (2026-07-21)
 
 
