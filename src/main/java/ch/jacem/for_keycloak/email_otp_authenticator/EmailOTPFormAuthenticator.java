@@ -31,12 +31,15 @@ import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.RoleModel;
+import org.keycloak.models.SingleUseObjectProvider;
 import org.keycloak.models.UserModel;
 import org.keycloak.services.messages.Messages;
 import org.keycloak.sessions.AuthenticationSessionModel;
 
 import ch.jacem.for_keycloak.email_otp_authenticator.authentication.authenticators.conditional.AcceptsFullContextInConfiguredFor;
 import ch.jacem.for_keycloak.email_otp_authenticator.helpers.ConfigHelper;
+import ch.jacem.for_keycloak.email_otp_authenticator.helpers.IssuanceLimiter;
+import ch.jacem.for_keycloak.email_otp_authenticator.helpers.PluralRules;
 import ch.jacem.for_keycloak.email_otp_authenticator.helpers.TrustDurationInfo;
 import ch.jacem.for_keycloak.email_otp_authenticator.trust.TrustStore;
 
@@ -54,6 +57,14 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
 
     public static final String OTP_EMAIL_TEMPLATE_NAME = "otp-email.ftl";
     public static final String OTP_EMAIL_SUBJECT_KEY = "emailOtpSubject";
+
+    // Form messages for refused code requests; the cooldown key is suffixed with a plural category
+    public static final String RESEND_COOLDOWN_MESSAGE_KEY_PREFIX = "errorResendCooldownEmailOtp";
+    public static final String ISSUANCE_LIMIT_MESSAGE_KEY = "errorTooManyRequestsEmailOtp";
+
+    // Event errors recorded when a code request is refused
+    public static final String EVENT_ERROR_RESEND_COOLDOWN = "email_otp_resend_cooldown";
+    public static final String EVENT_ERROR_ISSUANCE_LIMIT = "email_otp_issuance_limit";
 
     // Cookie name for device trust
     public static final String DEVICE_TRUST_COOKIE_NAME = "EMAIL_OTP_DEVICE_TRUST";
@@ -88,14 +99,40 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
         }
 
         if (inputData.containsKey(OTP_FORM_RESEND_ACTION_NAME)) {
+            // Refused requests use challenge() rather than failureChallenge() so they never
+            // count as brute-force failures, and they leave the current code valid
+            int cooldown = ConfigHelper.getResendCooldownSeconds(context);
+            String otpCreatedAt = authenticationSession.getAuthNote(AUTH_NOTE_OTP_CREATED_AT);
+            long cooldownRemaining = resendCooldownRemaining(
+                cooldown,
+                ConfigHelper.getOtpLifetime(context),
+                otpCreatedAt,
+                System.currentTimeMillis() / 1000
+            );
+            if (cooldownRemaining == 0 && !this.claimResend(context, cooldown, otpCreatedAt)) {
+                // A concurrent resend of the same code (e.g. a double click) is already sending a new one
+                cooldownRemaining = cooldown;
+            }
+            if (cooldownRemaining > 0) {
+                logger.debugf("Resend refused for user %s, cooldown active for %d more seconds", user.getId(), cooldownRemaining);
+
+                context.getEvent().user(user).error(EVENT_ERROR_RESEND_COOLDOWN);
+                String lang = context.getSession().getContext().resolveLocale(user).getLanguage();
+                context.challenge(
+                    this.buildOtpForm(context, resendCooldownMessageKey(cooldownRemaining, lang), null, cooldownRemaining)
+                );
+
+                return;
+            }
+
             logger.debug("Resending a new OTP");
 
             // Regenerate and resend a new OTP
-            this.generateOtp(context, true);
+            boolean issued = this.generateOtp(context, true);
 
             // Reshow the form
             context.challenge(
-                this.buildOtpForm(context, null, null)
+                this.buildOtpForm(context, issued ? null : ISSUANCE_LIMIT_MESSAGE_KEY, null)
             );
 
             return;
@@ -112,6 +149,17 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
         }
 
         String expectedOtp = authenticationSession.getAuthNote(AUTH_NOTE_OTP_KEY);
+        if (expectedOtp == null && IssuanceLimiter.isEnabled(ConfigHelper.getIssuanceLimit(context), ConfigHelper.getIssuanceLimitWindowSeconds(context))) {
+            // The issuance limit refused this session's code, so there is nothing to guess and this is
+            // not a failed attempt; try to send a code instead
+            boolean issued = this.generateOtp(context, false);
+            context.challenge(
+                this.buildOtpForm(context, issued ? null : ISSUANCE_LIMIT_MESSAGE_KEY, null)
+            );
+
+            return;
+        }
+
         if (otp.isEmpty() || expectedOtp == null || !MessageDigest.isEqual(
                 otp.getBytes(StandardCharsets.UTF_8),
                 expectedOtp.getBytes(StandardCharsets.UTF_8))) {
@@ -127,7 +175,17 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
         // Check if the OTP is expired
         if (this.isOtpExpired(context)) {
             // In this case, we generate a new OTP
-            this.generateOtp(context, true);
+            boolean issued = this.generateOtp(context, true);
+            if (!issued) {
+                // The issuance limit refused the replacement code (already recorded as an event). Like
+                // any refused request this must not count as a brute-force failure; only the owner
+                // holds the expired code.
+                context.challenge(
+                    this.buildOtpForm(context, ISSUANCE_LIMIT_MESSAGE_KEY, OTP_FORM_CODE_INPUT_NAME)
+                );
+
+                return;
+            }
 
             context.getEvent().user(user).error(Errors.EXPIRED_CODE);
             context.failureChallenge(
@@ -213,10 +271,10 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
         }
 
         // No trust found, require OTP
-        this.generateOtp(context, false);
+        boolean issued = this.generateOtp(context, false);
 
         context.challenge(
-            this.buildOtpForm(context, null, null)
+            this.buildOtpForm(context, issued ? null : ISSUANCE_LIMIT_MESSAGE_KEY, null)
         );
     }
 
@@ -485,14 +543,16 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
         return form.createForm(OTP_FORM_TEMPLATE_NAME);
     }
 
-    private Response buildOtpForm(AuthenticationFlowContext context, String errorMessage, String field) {
+    private Response buildOtpForm(AuthenticationFlowContext context, String errorMessage, String field, Object... errorParameters) {
         LoginFormsProvider form = context.form();
 
         if (errorMessage != null) {
             if (field != null) {
-                form.addError(new org.keycloak.models.utils.FormMessage(field, errorMessage));
+                form.addError(errorParameters.length == 0
+                    ? new org.keycloak.models.utils.FormMessage(field, errorMessage)
+                    : new org.keycloak.models.utils.FormMessage(field, errorMessage, errorParameters));
             } else {
-                form.setError(errorMessage);
+                form.setError(errorMessage, errorParameters);
             }
         }
 
@@ -574,11 +634,34 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
     public void close() {
     }
 
-    private String generateOtp(AuthenticationFlowContext context, boolean forceRegenerate) {
-        // If the OTP is already set in the auth session and we are not forcing a regeneration, return it
+    /**
+     * Makes sure a code is available, generating and emailing a new one if needed.
+     *
+     * @return false if a new code was needed but the per-user issuance limit refused it;
+     *         any existing code is then left untouched
+     */
+    private boolean generateOtp(AuthenticationFlowContext context, boolean forceRegenerate) {
+        // If the OTP is already set in the auth session and we are not forcing a regeneration, keep it
         String existingOtp = context.getAuthenticationSession().getAuthNote(AUTH_NOTE_OTP_KEY);
         if (!forceRegenerate && existingOtp != null && !existingOtp.isEmpty() && !this.isOtpExpired(context)) {
-            return existingOtp;
+            return true;
+        }
+
+        // Every emailed code counts towards the limit: first send, resend and regenerate-on-expiry
+        UserModel user = context.getUser();
+        RealmModel realm = context.getRealm();
+        int issuanceLimit = ConfigHelper.getIssuanceLimit(context);
+        int issuanceWindow = ConfigHelper.getIssuanceLimitWindowSeconds(context);
+        SingleUseObjectProvider store = null;
+        String issuanceSlot = null;
+        if (IssuanceLimiter.isEnabled(issuanceLimit, issuanceWindow)) {
+            store = context.getSession().singleUseObjects();
+            issuanceSlot = IssuanceLimiter.tryAcquire(store, realm, user, issuanceLimit, issuanceWindow);
+            if (issuanceSlot == null) {
+                logger.infof("Email OTP issuance limit reached for user %s in realm %s, no code sent", user.getId(), realm.getName());
+                context.getEvent().user(user).error(EVENT_ERROR_ISSUANCE_LIMIT);
+                return false;
+            }
         }
 
         String alphabet = ConfigHelper.getOtpCodeAlphabet(context);
@@ -595,12 +678,18 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
         context.getAuthenticationSession().setAuthNote(AUTH_NOTE_OTP_CREATED_AT, String.valueOf(System.currentTimeMillis() / 1000));
         context.getAuthenticationSession().setAuthNote(AUTH_NOTE_OTP_KEY, otp);
 
-        this.sendGeneratedOtp(context);
+        if (!this.sendGeneratedOtp(context) && issuanceSlot != null) {
+            // Nothing reached the user, so give the slot back
+            IssuanceLimiter.release(store, issuanceSlot);
+        }
 
-        return otp;
+        return true;
     }
 
-    private void sendGeneratedOtp(AuthenticationFlowContext context) {
+    /**
+     * @return true if the email was sent; on failure the error challenge is already set
+     */
+    private boolean sendGeneratedOtp(AuthenticationFlowContext context) {
         // If the OTP is not set in the auth session, fail
         String otp = context.getAuthenticationSession().getAuthNote(AUTH_NOTE_OTP_KEY);
         if (null == otp || otp.isEmpty()) {
@@ -612,7 +701,7 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
                 this.buildOtpForm(context, Messages.INTERNAL_SERVER_ERROR, null)
             );
 
-            return;
+            return false;
         }
 
         UserModel user = context.getUser();
@@ -627,7 +716,7 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
                 this.buildOtpForm(context, Messages.INVALID_EMAIL, null)
             );
 
-            return;
+            return false;
         }
 
         try {
@@ -651,6 +740,7 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
                 );
 
             logger.debug("OTP email sent to " + user.getUsername());
+            return true;
         } catch (Exception e) {
             logger.error("Failed to send OTP email", e);
 
@@ -659,7 +749,25 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
                 AuthenticationFlowError.INTERNAL_ERROR,
                 this.buildOtpForm(context, Messages.EMAIL_SENT_ERROR, null)
             );
+            return false;
         }
+    }
+
+    /**
+     * Claims the right to resend the current code, so that concurrent resends of the same code
+     * (e.g. a double click) email only one new code. Always allowed without a cooldown or a code.
+     */
+    private boolean claimResend(AuthenticationFlowContext context, int cooldownSeconds, String otpCreatedAt) {
+        if (cooldownSeconds <= 0 || otpCreatedAt == null || otpCreatedAt.isEmpty()) {
+            return true;
+        }
+
+        return IssuanceLimiter.tryClaimResend(
+            context.getSession().singleUseObjects(),
+            context.getAuthenticationSession(),
+            otpCreatedAt,
+            cooldownSeconds
+        );
     }
 
     /**
@@ -697,6 +805,38 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
         }
 
         return maskedLocal + "@" + maskedDomain;
+    }
+
+    /**
+     * Seconds left before a resend is allowed, or 0 if it is allowed now.
+     * The current code's creation time is the clock; with no code yet there is no cooldown,
+     * and an expired code can always be replaced.
+     */
+    static long resendCooldownRemaining(int cooldownSeconds, int codeLifetimeSeconds, String otpCreatedAt, long nowSeconds) {
+        if (cooldownSeconds <= 0 || otpCreatedAt == null || otpCreatedAt.isEmpty()) {
+            return 0;
+        }
+
+        long createdAt;
+        try {
+            createdAt = Long.parseLong(otpCreatedAt);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+
+        // Once the current code has expired there is nothing to protect, so never wait beyond its lifetime
+        long effectiveCooldown = codeLifetimeSeconds > 0 ? Math.min(cooldownSeconds, codeLifetimeSeconds) : cooldownSeconds;
+
+        return Math.max(0, createdAt + effectiveCooldown - nowSeconds);
+    }
+
+    /**
+     * Message key for the resend cooldown error, with the plural form matching the
+     * number of seconds in the given language (e.g. "errorResendCooldownEmailOtpMany").
+     */
+    static String resendCooldownMessageKey(long seconds, String lang) {
+        int n = (int) Math.min(seconds, Integer.MAX_VALUE);
+        return RESEND_COOLDOWN_MESSAGE_KEY_PREFIX + PluralRules.getCategory(n, lang);
     }
 
     private boolean isOtpExpired(AuthenticationFlowContext context) {

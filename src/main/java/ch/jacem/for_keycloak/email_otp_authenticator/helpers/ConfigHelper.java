@@ -1,11 +1,14 @@
 package ch.jacem.for_keycloak.email_otp_authenticator.helpers;
 
+import org.jboss.logging.Logger;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.models.AuthenticatorConfigModel;
 
 import ch.jacem.for_keycloak.email_otp_authenticator.EmailOTPFormAuthenticatorFactory;
 
 public class ConfigHelper {
+
+    private static final Logger logger = Logger.getLogger(ConfigHelper.class);
 
     public static String getRole(AuthenticatorConfigModel config) {
         return ConfigHelper.getConfigStringValue(
@@ -150,6 +153,66 @@ public class ConfigHelper {
 
     public static boolean isTrustOnlyWhenSole(AuthenticationFlowContext context) {
         return ConfigHelper.isTrustOnlyWhenSole(context.getAuthenticatorConfig());
+    }
+
+    // Issuance limit settings
+
+    public static int getResendCooldownSeconds(AuthenticatorConfigModel config) {
+        return ConfigHelper.getIssuanceSettingIntValue(
+            config,
+            EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_RESEND_COOLDOWN,
+            EmailOTPFormAuthenticatorFactory.SETTINGS_DEFAULT_VALUE_RESEND_COOLDOWN
+        );
+    }
+
+    public static int getResendCooldownSeconds(AuthenticationFlowContext context) {
+        return ConfigHelper.getResendCooldownSeconds(context.getAuthenticatorConfig());
+    }
+
+    public static int getIssuanceLimit(AuthenticatorConfigModel config) {
+        return ConfigHelper.getIssuanceSettingIntValue(
+            config,
+            EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_ISSUANCE_LIMIT,
+            EmailOTPFormAuthenticatorFactory.SETTINGS_DEFAULT_VALUE_ISSUANCE_LIMIT
+        );
+    }
+
+    public static int getIssuanceLimit(AuthenticationFlowContext context) {
+        return ConfigHelper.getIssuanceLimit(context.getAuthenticatorConfig());
+    }
+
+    public static int getIssuanceLimitWindowSeconds(AuthenticatorConfigModel config) {
+        return ConfigHelper.getIssuanceSettingIntValue(
+            config,
+            EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_ISSUANCE_LIMIT_WINDOW,
+            EmailOTPFormAuthenticatorFactory.SETTINGS_DEFAULT_VALUE_ISSUANCE_LIMIT_WINDOW
+        );
+    }
+
+    public static int getIssuanceLimitWindowSeconds(AuthenticationFlowContext context) {
+        return ConfigHelper.getIssuanceLimitWindowSeconds(context.getAuthenticatorConfig());
+    }
+
+    /**
+     * Like getConfigIntValue, but ignores surrounding whitespace and warns about unparseable
+     * values: for these settings a typo would otherwise silently switch the protection off.
+     */
+    private static int getIssuanceSettingIntValue(AuthenticatorConfigModel config, String key, int defaultValue) {
+        if (null == config || !config.getConfig().containsKey(key)) {
+            return defaultValue;
+        }
+
+        String value = config.getConfig().get(key);
+        if (null == value || value.trim().isEmpty()) {
+            return defaultValue;
+        }
+
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            logger.warnf("Invalid number '%s' for email OTP setting '%s', using the default %d", value, key, defaultValue);
+            return defaultValue;
+        }
     }
 
     public static String getConfigStringValue(AuthenticatorConfigModel config, String key) {

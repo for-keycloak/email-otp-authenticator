@@ -43,6 +43,14 @@ public class EmailOTPFormAuthenticatorFactory implements AuthenticatorFactory {
     public static final String SETTINGS_KEY_TRUST_ONLY_WHEN_SOLE = "trust-only-when-sole";
     public static final boolean SETTINGS_DEFAULT_VALUE_TRUST_ONLY_WHEN_SOLE = true;
 
+    // Issuance limit settings
+    public static final String SETTINGS_KEY_RESEND_COOLDOWN = "resend-cooldown";
+    public static final int SETTINGS_DEFAULT_VALUE_RESEND_COOLDOWN = 0; // disabled
+    public static final String SETTINGS_KEY_ISSUANCE_LIMIT = "issuance-limit";
+    public static final int SETTINGS_DEFAULT_VALUE_ISSUANCE_LIMIT = 0; // disabled
+    public static final String SETTINGS_KEY_ISSUANCE_LIMIT_WINDOW = "issuance-limit-window";
+    public static final int SETTINGS_DEFAULT_VALUE_ISSUANCE_LIMIT_WINDOW = 900; // 15 minutes
+
     @Override
     public Authenticator create(KeycloakSession session) {
         return SINGLETON;
@@ -173,6 +181,28 @@ public class EmailOTPFormAuthenticatorFactory implements AuthenticatorFactory {
                 "If enabled, IP/device trust only applies when email OTP is the only authenticator (not alternative with other methods). When disabled, trust applies regardless of flow configuration.",
                 ProviderConfigProperty.BOOLEAN_TYPE,
                 String.valueOf(SETTINGS_DEFAULT_VALUE_TRUST_ONLY_WHEN_SOLE)
+            ),
+            // Issuance limit settings
+            new ProviderConfigProperty(
+                SETTINGS_KEY_RESEND_COOLDOWN,
+                "Resend Cooldown (seconds)",
+                "Minimum number of seconds between the current code being sent and a resend being allowed. Resends within the cooldown are refused and the current code stays valid; once the code has expired it can always be replaced. Set to 0 to disable (Default: 0).",
+                ProviderConfigProperty.STRING_TYPE,
+                String.valueOf(SETTINGS_DEFAULT_VALUE_RESEND_COOLDOWN)
+            ),
+            new ProviderConfigProperty(
+                SETTINGS_KEY_ISSUANCE_LIMIT,
+                "Max Codes per User",
+                "Maximum number of codes emailed to a user within the issuance window, counted across all login attempts, including ones started by someone else. Once reached, no further codes are sent until the window allows it. At most 100. Set to 0 to disable (Default: 0).",
+                ProviderConfigProperty.STRING_TYPE,
+                String.valueOf(SETTINGS_DEFAULT_VALUE_ISSUANCE_LIMIT)
+            ),
+            new ProviderConfigProperty(
+                SETTINGS_KEY_ISSUANCE_LIMIT_WINDOW,
+                "Issuance Window (seconds)",
+                "The sliding window, in seconds, over which 'Max Codes per User' is counted (Default: 900s = 15min).",
+                ProviderConfigProperty.STRING_TYPE,
+                String.valueOf(SETTINGS_DEFAULT_VALUE_ISSUANCE_LIMIT_WINDOW)
             )
         );
     }

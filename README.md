@@ -9,6 +9,7 @@ A custom authentication SPI for Keycloak that provides an Email-based One-Time P
 - Configurable OTP code format (length and character set)
 - Configurable expiration time
 - Supports resending of codes
+- **Issuance Limits**: Optional resend cooldown and per-user cap on emailed codes
 - **IP Trust**: Automatically remember trusted IP addresses to skip OTP (rolling window)
 - **Device Trust**: User opt-in to remember trusted devices via cookie
 - Internationalization support for multiple languages
@@ -40,6 +41,12 @@ The authenticator provides the following configuration options:
 ### Trust Behavior Settings
 
 - **Trust Only When Sole Authenticator**: If enabled, IP/device trust only applies when email OTP is the only authenticator (not alternative with other methods). When disabled, trust applies regardless of flow configuration (default: `true`)
+
+### Issuance Limit Settings
+
+- **Resend Cooldown (seconds)**: Minimum time between the current code being sent and a resend being allowed. Never longer than the code lifetime, so an expired code can always be replaced. Set to `0` to disable (default: `0`)
+- **Max Codes per User**: Maximum number of codes emailed to a user within the issuance window, across all login attempts, at most `100`. Set to `0` to disable (default: `0`)
+- **Issuance Window (seconds)**: The sliding window over which **Max Codes per User** is counted (default: `900` = 15 minutes)
 
 
 ## How Trust Features Work
@@ -82,6 +89,33 @@ The authenticator sets different ACR values based on how authentication was comp
 | `email-otp-trusted-device` | OTP was skipped due to trusted device |
 
 These ACR values can be used by applications to understand the authentication strength and make authorization decisions accordingly.
+
+
+## Limiting How Often Codes Are Emailed
+
+Without limits, anyone who knows a user's username or email address can make Keycloak email that user a new code on every login attempt and every click on "Resend email". Codes only reach the owner's inbox, so nothing is disclosed, but the flood of mail is a nuisance to the user and can hurt the reputation of your sending domain. Both limits are disabled by default.
+
+**Resend Cooldown** applies within one login attempt. A resend within the cooldown of the current code being sent is refused: no email is sent, the form asks the user to wait for the remaining seconds, and the current code stays valid. Concurrent resends of the same code, such as a double click, send only one email. The cooldown never outlasts the code lifetime, so once the code has expired it can be replaced straight away. After the cooldown, resend works as before and emails a fresh code.
+
+**Max Codes per User** applies across all login attempts. Every emailed code counts: the first code of a login, each resend, and the new code sent when an expired code is submitted. Once a user has been sent the maximum number of codes within the window, no further code is emailed until the oldest one falls out of the window. The form then shows a generic "too many codes requested, try again later" message. A code whose email could not be sent does not count. The count is kept in Keycloak's clustered single-use object store (the one behind action tokens), so it holds across cluster nodes, expires on its own, and needs no database changes.
+
+**Trade-off: the limit can be used to block email codes.** Codes requested by anyone count towards the user's limit, including login attempts started by anyone who can reach the email code step for that user, for example by knowing the username in a flow where the code is the only factor. Such a person can use up the limit and keep the user from receiving codes until the window allows it; there is no admin action to reset the count early. Choose the limit with this in mind. It is the price of capping the flood, and it is bounded: it never locks the account itself (see below), and other authenticators in the flow keep working.
+
+Neither limit locks the account: a refused request does not count as a failed login for brute-force detection, does not disable the user, and leaves any code already sent valid. Submitting a code after the limit refused to send one is not counted as a failed login either; a code is sent instead if the limit now allows it.
+
+If the single-use object store cannot be reached, the limit fails closed: no code is sent and the user sees the "too many codes" message. With Keycloak's embedded cache the cause is logged as a warning; an external (remote) cache reports such failures only at Keycloak's own `DEBUG` level.
+
+Each refused request records one `LOGIN_ERROR` event, with the error `email_otp_resend_cooldown` or `email_otp_issuance_limit`, so refusals show up in the realm's login events and in any event listener. Refusals by the limit are also logged at `INFO`.
+
+**Recommended values:**
+
+| Setting | Value |
+|---------|-------|
+| Resend Cooldown (seconds) | `60` |
+| Max Codes per User | `5` |
+| Issuance Window (seconds) | `900` (15 minutes) |
+
+Raise **Max Codes per User** if your users routinely sign in from several devices or apps in quick succession, since each login counts.
 
 
 ## Customizing the OTP email template
