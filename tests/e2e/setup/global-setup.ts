@@ -5,6 +5,8 @@ import { setupTotpViaUI, closeBrowser, cleanupSecrets } from './totp-setup.js';
 const TEST_PASSWORD = 'testpassword';
 const OTP_ROLE = 'otp-required';
 const BRUTE_FORCE_FAILURE_FACTOR = 3;
+const RESEND_COOLDOWN_SECONDS = 30;
+const ISSUANCE_LIMIT = 3;
 
 export default async function globalSetup() {
   try {
@@ -19,6 +21,7 @@ export default async function globalSetup() {
     await setupShortTtlRealm();
     await setupI18nRealm();
     await setupBruteForceRealm();
+    await setupIssuanceLimitsRealm();
   } finally {
     await closeBrowser();
   }
@@ -688,4 +691,75 @@ async function setupBruteForceRealm() {
   await setupRequiredFlow(realmName);
 }
 
-export { TEST_PASSWORD, OTP_ROLE, BRUTE_FORCE_FAILURE_FACTOR };
+async function setupIssuanceLimitsRealm() {
+  const realmName = 'test-issuance-limits';
+
+  if (await keycloakAdmin.realmExists(realmName)) {
+    await keycloakAdmin.deleteRealm(realmName);
+  }
+
+  // Brute-force protection is on so the specs can assert that refused code
+  // requests never count as failed logins. Users are created by the specs
+  // themselves: the issuance count is per user and outlives a test run.
+  await keycloakAdmin.createRealm(realmName, {
+    bruteForceProtected: true,
+    failureFactor: BRUTE_FORCE_FAILURE_FACTOR,
+    waitIncrementSeconds: 60,
+    maxFailureWaitSeconds: 900,
+    maxDeltaTimeSeconds: 43200,
+    quickLoginCheckMilliSeconds: 0,
+  });
+  await keycloakAdmin.configureSmtp(realmName);
+  await keycloakAdmin.createTestClient(realmName);
+
+  await setupIssuanceLimitsFlow(realmName);
+}
+
+async function setupIssuanceLimitsFlow(realmName: string) {
+  const flowAlias = 'browser-issuance-limits';
+
+  await keycloakAdmin.deleteAuthenticationFlow(realmName, flowAlias);
+  await keycloakAdmin.createAuthenticationFlow(realmName, flowAlias, 'basic-flow');
+
+  const cookieExecId = await keycloakAdmin.addAuthenticationExecution(
+    realmName,
+    flowAlias,
+    'auth-cookie'
+  );
+  await keycloakAdmin.updateAuthenticationExecution(realmName, flowAlias, cookieExecId, 'ALTERNATIVE');
+
+  const formsSubflowId = await keycloakAdmin.addAuthenticationSubFlow(
+    realmName,
+    flowAlias,
+    'issuance-limits-forms',
+    'basic-flow'
+  );
+  await keycloakAdmin.updateAuthenticationExecution(realmName, flowAlias, formsSubflowId, 'ALTERNATIVE');
+
+  const userPassExecId = await keycloakAdmin.addAuthenticationExecution(
+    realmName,
+    'issuance-limits-forms',
+    'auth-username-password-form'
+  );
+  await keycloakAdmin.updateAuthenticationExecution(realmName, 'issuance-limits-forms', userPassExecId, 'REQUIRED');
+
+  const emailOtpExecId = await keycloakAdmin.addAuthenticationExecution(
+    realmName,
+    'issuance-limits-forms',
+    'email-otp-form'
+  );
+  await keycloakAdmin.updateAuthenticationExecution(realmName, 'issuance-limits-forms', emailOtpExecId, 'REQUIRED');
+
+  await keycloakAdmin.createAuthenticatorConfig(realmName, emailOtpExecId, 'email-otp-issuance-limits-config', {
+    'code-alphabet': '23456789ABCDEFGHJKLMNPQRSTUVWXYZ',
+    'code-length': '6',
+    'code-lifetime': '600',
+    'resend-cooldown': String(RESEND_COOLDOWN_SECONDS),  // 30 seconds
+    'issuance-limit': String(ISSUANCE_LIMIT),  // 3 codes per window
+    'issuance-limit-window': '600',  // 10 minutes
+  });
+
+  await keycloakAdmin.bindBrowserFlow(realmName, flowAlias);
+}
+
+export { TEST_PASSWORD, OTP_ROLE, BRUTE_FORCE_FAILURE_FACTOR, RESEND_COOLDOWN_SECONDS, ISSUANCE_LIMIT };

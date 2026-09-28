@@ -280,4 +280,75 @@ class ConfigHelperTest {
             assertEquals(0L, seconds);
         }
     }
+
+    @Nested
+    @DisplayName("Issuance Limit Settings")
+    class IssuanceLimitSettings {
+
+        @Test
+        @DisplayName("resend cooldown and issuance limit are disabled when not configured")
+        void disabledWhenNotConfigured() {
+            when(config.getConfig()).thenReturn(configMap);
+
+            assertEquals(0, ConfigHelper.getResendCooldownSeconds(config));
+            assertEquals(0, ConfigHelper.getIssuanceLimit(config));
+            assertEquals(900, ConfigHelper.getIssuanceLimitWindowSeconds(config));
+        }
+
+        @Test
+        @DisplayName("defaults apply when there is no authenticator config")
+        void defaultsWithoutConfig() {
+            assertEquals(0, ConfigHelper.getResendCooldownSeconds((AuthenticatorConfigModel) null));
+            assertEquals(0, ConfigHelper.getIssuanceLimit((AuthenticatorConfigModel) null));
+            assertEquals(900, ConfigHelper.getIssuanceLimitWindowSeconds((AuthenticatorConfigModel) null));
+        }
+
+        @Test
+        @DisplayName("reads configured values")
+        void readsConfiguredValues() {
+            configMap.put("resend-cooldown", "60");
+            configMap.put("issuance-limit", "5");
+            configMap.put("issuance-limit-window", "1800");
+            when(config.getConfig()).thenReturn(configMap);
+
+            assertEquals(60, ConfigHelper.getResendCooldownSeconds(config));
+            assertEquals(5, ConfigHelper.getIssuanceLimit(config));
+            assertEquals(1800, ConfigHelper.getIssuanceLimitWindowSeconds(config));
+        }
+
+        @Test
+        @DisplayName("surrounding whitespace is ignored")
+        void whitespaceIsTrimmed() {
+            configMap.put("resend-cooldown", " 60 ");
+            configMap.put("issuance-limit", "5\t");
+            configMap.put("issuance-limit-window", "   ");
+            when(config.getConfig()).thenReturn(configMap);
+
+            assertEquals(60, ConfigHelper.getResendCooldownSeconds(config));
+            assertEquals(5, ConfigHelper.getIssuanceLimit(config));
+            assertEquals(900, ConfigHelper.getIssuanceLimitWindowSeconds(config));
+        }
+
+        @Test
+        @DisplayName("existing settings keep their parsing: surrounding whitespace falls back to the default")
+        void existingSettingsNotTrimmed() {
+            configMap.put("code-length", " 8 ");
+            when(config.getConfig()).thenReturn(configMap);
+
+            assertEquals(6, ConfigHelper.getOtpCodeLength(config));
+        }
+
+        @Test
+        @DisplayName("invalid values fall back to the defaults")
+        void invalidValuesFallBack() {
+            configMap.put("resend-cooldown", "soon");
+            configMap.put("issuance-limit", "");
+            configMap.put("issuance-limit-window", "15m");
+            when(config.getConfig()).thenReturn(configMap);
+
+            assertEquals(0, ConfigHelper.getResendCooldownSeconds(config));
+            assertEquals(0, ConfigHelper.getIssuanceLimit(config));
+            assertEquals(900, ConfigHelper.getIssuanceLimitWindowSeconds(config));
+        }
+    }
 }

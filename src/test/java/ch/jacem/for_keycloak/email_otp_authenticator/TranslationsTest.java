@@ -8,7 +8,11 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import java.text.MessageFormat;
+import java.util.Locale;
 import java.util.Properties;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.DisplayName;
@@ -18,6 +22,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import ch.jacem.for_keycloak.email_otp_authenticator.helpers.PluralRules;
 
 @DisplayName("Translations")
 class TranslationsTest {
@@ -48,7 +54,11 @@ class TranslationsTest {
             "unitMonthOne",
             "unitMonthMany",
             "unitYearOne",
-            "unitYearMany"
+            "unitYearMany",
+            // Issuance limits (minimum: One and Many forms)
+            "errorResendCooldownEmailOtpOne",
+            "errorResendCooldownEmailOtpMany",
+            "errorTooManyRequestsEmailOtp"
     );
 
     private static final List<String> DEVICE_TRUST_KEYS = Arrays.asList(
@@ -60,6 +70,8 @@ class TranslationsTest {
             "emailOtpExpiration",      // {0} for minutes
             "dontAskForCodeFor"        // {0} for value, {1} for unit
     );
+
+    private static final String RESEND_COOLDOWN_KEY_PREFIX = "errorResendCooldownEmailOtp";
 
     static Stream<String> allLocales() {
         return Stream.of(
@@ -128,6 +140,63 @@ class TranslationsTest {
             String dontAskFor = messages.getProperty("dontAskForCodeFor");
             assertTrue(dontAskFor.contains("{1}"),
                 String.format("Missing {1} placeholder in 'dontAskForCodeFor' for locale '%s': %s", locale, dontAskFor));
+        }
+    }
+
+    @Nested
+    @DisplayName("Issuance Limit Translations")
+    class IssuanceLimitTranslations {
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("ch.jacem.for_keycloak.email_otp_authenticator.TranslationsTest#allLocales")
+        @DisplayName("has a resend cooldown message for every plural form the language uses")
+        void hasEveryPluralFormOfResendCooldown(String locale) throws IOException {
+            Properties messages = loadMessages(locale);
+            String lang = locale.split("_")[0];
+
+            Set<String> categories = new TreeSet<>();
+            for (int seconds = 1; seconds <= 3600; seconds++) {
+                categories.add(PluralRules.getCategory(seconds, lang));
+            }
+
+            for (String category : categories) {
+                String key = RESEND_COOLDOWN_KEY_PREFIX + category;
+                String value = messages.getProperty(key);
+                assertNotNull(value,
+                    String.format("Missing key '%s' in locale '%s'", key, locale));
+                assertFalse(value.isBlank(),
+                    String.format("Empty value for key '%s' in locale '%s'", key, locale));
+                // {0,number,#} keeps the locale's digits but never groups them (3600, not 3,600)
+                assertTrue(value.contains("{0,number,#}"),
+                    String.format("Missing {0,number,#} placeholder in '%s' for locale '%s': %s", key, locale, value));
+            }
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("ch.jacem.for_keycloak.email_otp_authenticator.TranslationsTest#allLocales")
+        @DisplayName("issuance limit messages render through MessageFormat")
+        void issuanceLimitMessagesRender(String locale) throws IOException {
+            Properties messages = loadMessages(locale);
+            Locale javaLocale = Locale.forLanguageTag(locale.replace('_', '-'));
+
+            for (String key : messages.stringPropertyNames()) {
+                if (!key.startsWith(RESEND_COOLDOWN_KEY_PREFIX) && !key.equals("errorTooManyRequestsEmailOtp")) {
+                    continue;
+                }
+                String pattern = messages.getProperty(key);
+                String rendered = new MessageFormat(pattern, javaLocale).format(new Object[] {3600L});
+                String expectedNumber = new MessageFormat("{0,number,#}", javaLocale).format(new Object[] {3600L});
+
+                assertFalse(rendered.contains("{"),
+                    String.format("Unrendered placeholder in '%s' for locale '%s': %s", key, locale, rendered));
+                if (key.startsWith(RESEND_COOLDOWN_KEY_PREFIX)) {
+                    assertTrue(rendered.contains(expectedNumber),
+                        String.format("Seconds not rendered ungrouped in '%s' for locale '%s': %s", key, locale, rendered));
+                }
+                // A lone apostrophe is a MessageFormat quote and would be dropped; write it as ''
+                assertFalse(pattern.replace("''", "").contains("'"),
+                    String.format("Apostrophes in '%s' for locale '%s' must be written as '': %s", key, locale, pattern));
+            }
         }
     }
 

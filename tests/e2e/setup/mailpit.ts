@@ -81,6 +81,45 @@ export class MailPit {
     );
   }
 
+  async getMessagesTo(toEmail: string): Promise<MailpitMessagesResponse['messages']> {
+    const response = await this.getMessages();
+    return response.messages
+      .filter((msg) =>
+        msg.To.some((t) => t.Address.toLowerCase() === toEmail.toLowerCase())
+      )
+      .sort((a, b) => Date.parse(b.Date) - Date.parse(a.Date));
+  }
+
+  // Messages to the address whose IDs are not in `seen`, newest first. Tracking IDs rather than
+  // counting keeps assertions valid when another spec clears the inbox concurrently.
+  async getUnseenMessagesTo(
+    toEmail: string,
+    seen: Set<string>
+  ): Promise<MailpitMessagesResponse['messages']> {
+    return (await this.getMessagesTo(toEmail)).filter((msg) => !seen.has(msg.ID));
+  }
+
+  // Waits for a message to the address that is not in `seen`, adds it to `seen` and returns it
+  async waitForNewMessage(
+    toEmail: string,
+    seen: Set<string>,
+    timeoutMs: number = 30000
+  ): Promise<MailpitMessage> {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeoutMs) {
+      const [newest] = await this.getUnseenMessagesTo(toEmail, seen);
+      if (newest) {
+        seen.add(newest.ID);
+        return this.getMessage(newest.ID);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    throw new Error(`Timeout waiting for a new email to ${toEmail}`);
+  }
+
   extractOtpCode(message: MailpitMessage): string | null {
     // Try to extract OTP from text body
     // The OTP code is typically displayed prominently in the email
