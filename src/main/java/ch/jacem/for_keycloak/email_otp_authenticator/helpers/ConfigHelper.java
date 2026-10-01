@@ -1,5 +1,8 @@
 package ch.jacem.for_keycloak.email_otp_authenticator.helpers;
 
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
 import org.jboss.logging.Logger;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.models.AuthenticatorConfigModel;
@@ -9,6 +12,9 @@ import ch.jacem.for_keycloak.email_otp_authenticator.EmailOTPFormAuthenticatorFa
 public class ConfigHelper {
 
     private static final Logger logger = Logger.getLogger(ConfigHelper.class);
+
+    // Settings are read on every login; remember which bad values were reported so each is logged once
+    private static final Set<String> reportedValues = ConcurrentHashMap.newKeySet();
 
     public static String getRole(AuthenticatorConfigModel config) {
         return ConfigHelper.getConfigStringValue(
@@ -161,7 +167,8 @@ public class ConfigHelper {
         return ConfigHelper.getIssuanceSettingIntValue(
             config,
             EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_RESEND_COOLDOWN,
-            EmailOTPFormAuthenticatorFactory.SETTINGS_DEFAULT_VALUE_RESEND_COOLDOWN
+            EmailOTPFormAuthenticatorFactory.SETTINGS_DEFAULT_VALUE_RESEND_COOLDOWN,
+            Integer.MAX_VALUE
         );
     }
 
@@ -173,7 +180,8 @@ public class ConfigHelper {
         return ConfigHelper.getIssuanceSettingIntValue(
             config,
             EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_ISSUANCE_LIMIT,
-            EmailOTPFormAuthenticatorFactory.SETTINGS_DEFAULT_VALUE_ISSUANCE_LIMIT
+            EmailOTPFormAuthenticatorFactory.SETTINGS_DEFAULT_VALUE_ISSUANCE_LIMIT,
+            IssuanceLimiter.MAX_LIMIT
         );
     }
 
@@ -185,7 +193,8 @@ public class ConfigHelper {
         return ConfigHelper.getIssuanceSettingIntValue(
             config,
             EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_ISSUANCE_LIMIT_WINDOW,
-            EmailOTPFormAuthenticatorFactory.SETTINGS_DEFAULT_VALUE_ISSUANCE_LIMIT_WINDOW
+            EmailOTPFormAuthenticatorFactory.SETTINGS_DEFAULT_VALUE_ISSUANCE_LIMIT_WINDOW,
+            Integer.MAX_VALUE
         );
     }
 
@@ -194,10 +203,11 @@ public class ConfigHelper {
     }
 
     /**
-     * Like getConfigIntValue, but ignores surrounding whitespace and warns about unparseable
-     * values: for these settings a typo would otherwise silently switch the protection off.
+     * Like getConfigIntValue, but ignores surrounding whitespace and warns once about values that
+     * are unparseable, negative or above {@code max}: for these settings a mistake would otherwise
+     * silently switch the protection off or change it.
      */
-    private static int getIssuanceSettingIntValue(AuthenticatorConfigModel config, String key, int defaultValue) {
+    private static int getIssuanceSettingIntValue(AuthenticatorConfigModel config, String key, int defaultValue, int max) {
         if (null == config || !config.getConfig().containsKey(key)) {
             return defaultValue;
         }
@@ -207,12 +217,23 @@ public class ConfigHelper {
             return defaultValue;
         }
 
+        int number;
         try {
-            return Integer.parseInt(value.trim());
+            number = Integer.parseInt(value.trim());
         } catch (NumberFormatException e) {
-            logger.warnf("Invalid number '%s' for email OTP setting '%s', using the default %d", value, key, defaultValue);
+            if (reportedValues.add(key + "=" + value)) {
+                logger.warnf("Invalid number '%s' for email OTP setting '%s', using the default %d", value, key, defaultValue);
+            }
             return defaultValue;
         }
+
+        if (number < 0 && reportedValues.add(key + "=" + value)) {
+            logger.warnf("Negative value %d for email OTP setting '%s' disables it", number, key);
+        } else if (number > max && reportedValues.add(key + "=" + value)) {
+            logger.warnf("Value %d for email OTP setting '%s' is above the maximum of %d, using %d", number, key, max, max);
+        }
+
+        return number;
     }
 
     public static String getConfigStringValue(AuthenticatorConfigModel config, String key) {
