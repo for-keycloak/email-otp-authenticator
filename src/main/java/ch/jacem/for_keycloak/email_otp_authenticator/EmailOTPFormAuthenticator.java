@@ -101,11 +101,13 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
         if (inputData.containsKey(OTP_FORM_RESEND_ACTION_NAME)) {
             // Refused requests use challenge() rather than failureChallenge() so they never
             // count as brute-force failures, and they leave the current code valid
-            int cooldown = ConfigHelper.getResendCooldownSeconds(context);
+            int cooldown = effectiveResendCooldown(
+                ConfigHelper.getResendCooldownSeconds(context),
+                ConfigHelper.getOtpLifetime(context)
+            );
             String otpCreatedAt = authenticationSession.getAuthNote(AUTH_NOTE_OTP_CREATED_AT);
             long cooldownRemaining = resendCooldownRemaining(
                 cooldown,
-                ConfigHelper.getOtpLifetime(context),
                 otpCreatedAt,
                 System.currentTimeMillis() / 1000
             );
@@ -827,11 +829,20 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
     }
 
     /**
-     * Seconds left before a resend is allowed, or 0 if it is allowed now.
-     * The current code's creation time is the clock; with no code yet there is no cooldown,
-     * and an expired code can always be replaced.
+     * The resend cooldown that applies: the configured one, but never longer than the code
+     * lifetime, since once the current code has expired there is nothing to protect.
      */
-    static long resendCooldownRemaining(int cooldownSeconds, int codeLifetimeSeconds, String otpCreatedAt, long nowSeconds) {
+    static int effectiveResendCooldown(int cooldownSeconds, int codeLifetimeSeconds) {
+        return codeLifetimeSeconds > 0 ? Math.min(cooldownSeconds, codeLifetimeSeconds) : cooldownSeconds;
+    }
+
+    /**
+     * Seconds left before a resend is allowed, or 0 if it is allowed now.
+     * The current code's creation time is the clock; with no code yet there is no cooldown.
+     *
+     * @param cooldownSeconds the effective cooldown, see {@link #effectiveResendCooldown}
+     */
+    static long resendCooldownRemaining(int cooldownSeconds, String otpCreatedAt, long nowSeconds) {
         if (cooldownSeconds <= 0 || otpCreatedAt == null || otpCreatedAt.isEmpty()) {
             return 0;
         }
@@ -843,10 +854,7 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
             return 0;
         }
 
-        // Once the current code has expired there is nothing to protect, so never wait beyond its lifetime
-        long effectiveCooldown = codeLifetimeSeconds > 0 ? Math.min(cooldownSeconds, codeLifetimeSeconds) : cooldownSeconds;
-
-        return Math.max(0, createdAt + effectiveCooldown - nowSeconds);
+        return Math.max(0, createdAt + cooldownSeconds - nowSeconds);
     }
 
     /**

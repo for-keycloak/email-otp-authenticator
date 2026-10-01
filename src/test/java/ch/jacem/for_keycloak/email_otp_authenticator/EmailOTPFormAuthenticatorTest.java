@@ -490,42 +490,53 @@ class EmailOTPFormAuthenticatorTest {
         @Test
         @DisplayName("returns the seconds left within the cooldown")
         void remainingWithinCooldown() {
-            assertEquals(50, EmailOTPFormAuthenticator.resendCooldownRemaining(60, 600, "1000", 1010));
+            assertEquals(50, EmailOTPFormAuthenticator.resendCooldownRemaining(60, "1000", 1010));
         }
 
         @Test
         @DisplayName("returns 0 once the cooldown has passed")
         void zeroAfterCooldown() {
-            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(60, 600, "1000", 1060));
-            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(60, 600, "1000", 5000));
+            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(60, "1000", 1060));
+            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(60, "1000", 5000));
         }
 
         @Test
         @DisplayName("returns 0 when the cooldown is disabled")
         void zeroWhenDisabled() {
-            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(0, 600, "1000", 1000));
-            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(-5, 600, "1000", 1000));
+            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(0, "1000", 1000));
+            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(-5, "1000", 1000));
         }
 
         @Test
         @DisplayName("returns 0 when no code has been created yet")
         void zeroWithoutCode() {
-            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(60, 600, null, 1000));
-            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(60, 600, "", 1000));
+            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(60, null, 1000));
+            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(60, "", 1000));
         }
 
         @Test
         @DisplayName("returns 0 when the creation note is malformed")
         void zeroWhenMalformed() {
-            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(60, 600, "not-a-number", 1000));
+            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(60, "not-a-number", 1000));
         }
 
         @Test
         @DisplayName("never waits beyond the code lifetime, so an expired code can always be replaced")
         void cappedAtCodeLifetime() {
-            assertEquals(50, EmailOTPFormAuthenticator.resendCooldownRemaining(600, 60, "1000", 1010));
-            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(600, 60, "1000", 1060));
-            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(600, 60, "1000", 1120));
+            int cooldown = EmailOTPFormAuthenticator.effectiveResendCooldown(600, 60);
+
+            assertEquals(50, EmailOTPFormAuthenticator.resendCooldownRemaining(cooldown, "1000", 1010));
+            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(cooldown, "1000", 1060));
+            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(cooldown, "1000", 1120));
+        }
+
+        @Test
+        @DisplayName("effective cooldown is the configured one, capped at the code lifetime")
+        void effectiveCooldown() {
+            assertEquals(60, EmailOTPFormAuthenticator.effectiveResendCooldown(60, 600));
+            assertEquals(60, EmailOTPFormAuthenticator.effectiveResendCooldown(600, 60));
+            assertEquals(600, EmailOTPFormAuthenticator.effectiveResendCooldown(600, 0));
+            assertEquals(0, EmailOTPFormAuthenticator.effectiveResendCooldown(0, 60));
         }
 
         @Test
@@ -700,6 +711,22 @@ class EmailOTPFormAuthenticatorTest {
             verify(form).setError("errorResendCooldownEmailOtpMany", 60L);
             verify(context).challenge(any());
             verifyNoBruteForceFailure();
+        }
+
+        @Test
+        @DisplayName("a concurrent resend is told the cooldown capped at the code lifetime, not the configured one")
+        void concurrentResendShowsEffectiveCooldown() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_RESEND_COOLDOWN, "600");
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_CODE_LIFETIME, "60");
+            givenCurrentCodeCreatedSecondsAgo(61);
+            when(singleUseObjects.putIfAbsent(anyString(), anyLong())).thenReturn(false);
+            givenResendRequested();
+
+            authenticator.action(context);
+
+            verifyNoEmailSent();
+            verify(singleUseObjects).putIfAbsent(startsWith("email-otp-resend:"), eq(60L));
+            verify(form).setError("errorResendCooldownEmailOtpMany", 60L);
         }
 
         @Test
