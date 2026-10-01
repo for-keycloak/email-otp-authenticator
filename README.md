@@ -105,7 +105,7 @@ Neither limit locks the account: a refused request does not count as a failed lo
 
 If the single-use object store cannot be reached, the limit fails closed: no code is sent and the user sees the "too many codes" message. With Keycloak's embedded cache the cause is logged as a warning; an external (remote) cache reports such failures only at Keycloak's own `DEBUG` level.
 
-Each refused request records one `LOGIN_ERROR` event, with the error `email_otp_resend_cooldown` or `email_otp_issuance_limit`, so refusals show up in the realm's login events and in any event listener. Refusals by the limit are also logged at `INFO`.
+Each refused request records one `LOGIN_ERROR` event, with the error `email_otp_resend_cooldown` or `email_otp_issuance_limit`, so refusals show up in the realm's login events and in any event listener. They are logged at `DEBUG` only, so requests at the limit can't flood the server log.
 
 **Recommended values:**
 

@@ -664,7 +664,9 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
             store = context.getSession().singleUseObjects();
             issuanceSlot = IssuanceLimiter.tryAcquire(store, realm, user, issuanceLimit, issuanceWindow);
             if (issuanceSlot == null) {
-                logger.infof("Email OTP issuance limit reached for user %s in realm %s, no code sent", user.getId(), realm.getName());
+                // DEBUG only: the LOGIN_ERROR event already records each refusal, and requests at the
+                // limit cost an attacker nothing, so a higher level would let them flood the log
+                logger.debugf("Email OTP issuance limit reached for user %s in realm %s, no code sent", user.getId(), realm.getName());
                 context.getEvent().user(user).error(EVENT_ERROR_ISSUANCE_LIMIT);
                 return false;
             }

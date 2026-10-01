@@ -7,7 +7,12 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.Locale;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
 
 import jakarta.ws.rs.core.MultivaluedHashMap;
 import jakarta.ws.rs.core.MultivaluedMap;
@@ -820,6 +825,40 @@ class EmailOTPFormAuthenticatorTest {
             verify(form).setError(EmailOTPFormAuthenticator.ISSUANCE_LIMIT_MESSAGE_KEY);
             verify(context).challenge(any());
             verifyNoBruteForceFailure();
+        }
+
+        @Test
+        @DisplayName("refusals at the limit are not logged at INFO or above, so requests can't flood the log")
+        void refusalsAtLimitDoNotFloodLog() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_ISSUANCE_LIMIT, "2");
+            when(singleUseObjects.putIfAbsent(anyString(), anyLong())).thenReturn(false);
+
+            List<LogRecord> records = new CopyOnWriteArrayList<>();
+            Handler handler = new Handler() {
+                @Override
+                public void publish(LogRecord record) {
+                    records.add(record);
+                }
+
+                @Override
+                public void flush() {
+                }
+
+                @Override
+                public void close() {
+                }
+            };
+            java.util.logging.Logger logger = java.util.logging.Logger.getLogger(EmailOTPFormAuthenticator.class.getName());
+            logger.addHandler(handler);
+            try {
+                authenticator.authenticate(context);
+            } finally {
+                logger.removeHandler(handler);
+            }
+
+            verify(event).error(EmailOTPFormAuthenticator.EVENT_ERROR_ISSUANCE_LIMIT);
+            assertTrue(records.stream().noneMatch(r -> r.getLevel().intValue() >= Level.INFO.intValue()),
+                "logged at INFO or above: " + records.stream().map(LogRecord::getMessage).toList());
         }
 
         @Test
