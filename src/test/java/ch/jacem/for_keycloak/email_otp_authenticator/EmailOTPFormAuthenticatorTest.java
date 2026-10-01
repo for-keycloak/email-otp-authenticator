@@ -814,6 +814,38 @@ class EmailOTPFormAuthenticatorTest {
         }
 
         @Test
+        @DisplayName("a resend refused by the limit gives back its resend claim, so the next resend is tried again")
+        void resendAtLimitReleasesResendClaim() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_RESEND_COOLDOWN, "60");
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_ISSUANCE_LIMIT, "2");
+            givenCurrentCodeCreatedSecondsAgo(61);
+            String resendClaim = "email-otp-resend:root-1:tab-1:" + notes.get(EmailOTPFormAuthenticator.AUTH_NOTE_OTP_CREATED_AT);
+            when(singleUseObjects.putIfAbsent(eq(resendClaim), anyLong())).thenReturn(true);
+            when(singleUseObjects.putIfAbsent(startsWith("email-otp-issuance:"), anyLong())).thenReturn(false);
+            givenResendRequested();
+
+            authenticator.action(context);
+
+            verifyNoEmailSent();
+            verify(form).setError(EmailOTPFormAuthenticator.ISSUANCE_LIMIT_MESSAGE_KEY);
+            verify(singleUseObjects).remove(resendClaim);
+            verifyNoBruteForceFailure();
+        }
+
+        @Test
+        @DisplayName("a resend refused by the limit without a cooldown has no resend claim to give back")
+        void resendAtLimitWithoutCooldownReleasesNothing() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_ISSUANCE_LIMIT, "2");
+            when(singleUseObjects.putIfAbsent(anyString(), anyLong())).thenReturn(false);
+            givenCurrentCodeCreatedSecondsAgo(30);
+            givenResendRequested();
+
+            authenticator.action(context);
+
+            verify(singleUseObjects, never()).remove(anyString());
+        }
+
+        @Test
         @DisplayName("regenerating an expired code at the limit sends no email, says so and registers no brute-force failure")
         void expiredCodeAtLimitIsNotRegenerated() throws Exception {
             configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_ISSUANCE_LIMIT, "2");

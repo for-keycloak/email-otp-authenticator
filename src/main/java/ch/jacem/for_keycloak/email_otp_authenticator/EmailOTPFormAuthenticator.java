@@ -129,6 +129,10 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
 
             // Regenerate and resend a new OTP
             boolean issued = this.generateOtp(context, true);
+            if (!issued) {
+                // The current code stays, so let the next resend of it try the limit again
+                this.releaseResend(context, cooldown, otpCreatedAt);
+            }
 
             // Reshow the form
             context.challenge(
@@ -767,6 +771,21 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
             context.getAuthenticationSession(),
             otpCreatedAt,
             cooldownSeconds
+        );
+    }
+
+    /**
+     * Gives back a claim taken by {@link #claimResend} whose resend sent no code.
+     */
+    private void releaseResend(AuthenticationFlowContext context, int cooldownSeconds, String otpCreatedAt) {
+        if (cooldownSeconds <= 0 || otpCreatedAt == null || otpCreatedAt.isEmpty()) {
+            return;
+        }
+
+        IssuanceLimiter.releaseResend(
+            context.getSession().singleUseObjects(),
+            context.getAuthenticationSession(),
+            otpCreatedAt
         );
     }
 

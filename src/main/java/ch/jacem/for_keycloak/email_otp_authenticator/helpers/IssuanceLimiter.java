@@ -78,8 +78,8 @@ public final class IssuanceLimiter {
         try {
             store.remove(slot);
         } catch (RuntimeException e) {
-            // The slot still expires with its window
-            logger.warnf(e, "Could not release email OTP issuance slot %s", slot);
+            // It still expires with its lifespan
+            logger.warnf(e, "Could not release single-use object %s", slot);
         }
     }
 
@@ -92,8 +92,18 @@ public final class IssuanceLimiter {
      * @return true if this request may resend the code
      */
     public static boolean tryClaimResend(SingleUseObjectProvider store, AuthenticationSessionModel authSession, String otpCreatedAt, int lifespanSeconds) {
-        String key = RESEND_KEY_PREFIX + authSession.getParentSession().getId() + ":" + authSession.getTabId() + ":" + otpCreatedAt;
-        return putIfAbsent(store, key, Math.max(1, lifespanSeconds));
+        return putIfAbsent(store, resendKey(authSession, otpCreatedAt), Math.max(1, lifespanSeconds));
+    }
+
+    /**
+     * Give back a resend claim whose resend sent no code, so the next resend is tried again.
+     */
+    public static void releaseResend(SingleUseObjectProvider store, AuthenticationSessionModel authSession, String otpCreatedAt) {
+        release(store, resendKey(authSession, otpCreatedAt));
+    }
+
+    private static String resendKey(AuthenticationSessionModel authSession, String otpCreatedAt) {
+        return RESEND_KEY_PREFIX + authSession.getParentSession().getId() + ":" + authSession.getTabId() + ":" + otpCreatedAt;
     }
 
     private static boolean putIfAbsent(SingleUseObjectProvider store, String key, long lifespanSeconds) {

@@ -164,4 +164,20 @@ class IssuanceLimiterTest {
 
         verify(store, times(2)).putIfAbsent("email-otp-resend:root-1:tab-1:1000", 60L);
     }
+
+    @Test
+    @DisplayName("a released resend claim can be claimed again")
+    void releasedResendCanBeClaimedAgain() {
+        AuthenticationSessionModel authSession = mock(AuthenticationSessionModel.class);
+        RootAuthenticationSessionModel rootSession = mock(RootAuthenticationSessionModel.class);
+        when(authSession.getParentSession()).thenReturn(rootSession);
+        when(rootSession.getId()).thenReturn("root-1");
+        when(authSession.getTabId()).thenReturn("tab-1");
+
+        assertTrue(IssuanceLimiter.tryClaimResend(store, authSession, "1000", 60));
+        IssuanceLimiter.releaseResend(store, authSession, "1000");
+
+        assertTrue(IssuanceLimiter.tryClaimResend(store, authSession, "1000", 60));
+        verify(store).remove("email-otp-resend:root-1:tab-1:1000");
+    }
 }
