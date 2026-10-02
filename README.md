@@ -218,8 +218,10 @@ Access:
 
 The authenticator is built and tested with multiple Keycloak versions:
 
+- 26.8.0
+- 26.7.5
 - 26.7.3 (default)
-- 26.6.2
+- 26.6.4
 - 26.5.7
 - 26.4.7
 - 26.3.5
