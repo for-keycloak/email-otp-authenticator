@@ -346,7 +346,7 @@ class ConfigHelperTest {
         }
 
         @Test
-        @DisplayName("out-of-range values are kept but warned about, once per value")
+        @DisplayName("out-of-range values are warned about once per value, and values above the maximum are capped")
         void outOfRangeValuesWarnOnce() {
             configMap.put("resend-cooldown", "-5");
             configMap.put("issuance-limit", "250");
@@ -356,7 +356,7 @@ class ConfigHelperTest {
             List<String> warnings = captureWarnings(() -> {
                 for (int request = 0; request < 3; request++) {
                     assertEquals(-5, ConfigHelper.getResendCooldownSeconds(config));
-                    assertEquals(250, ConfigHelper.getIssuanceLimit(config));
+                    assertEquals(100, ConfigHelper.getIssuanceLimit(config));
                     assertEquals(-1, ConfigHelper.getIssuanceLimitWindowSeconds(config));
                 }
             });
@@ -381,6 +381,24 @@ class ConfigHelperTest {
 
             assertEquals(1, warnings.size(), warnings.toString());
             assertTrue(warnings.get(0).contains("five"), warnings.toString());
+        }
+
+        @Test
+        @DisplayName("the same bad value in two authenticator configs is warned about for each")
+        void sameBadValueWarnsPerConfig() {
+            AuthenticatorConfigModel otherConfig = mock(AuthenticatorConfigModel.class);
+            configMap.put("issuance-limit", "-7");
+            when(config.getId()).thenReturn("config-a");
+            when(config.getConfig()).thenReturn(configMap);
+            when(otherConfig.getId()).thenReturn("config-b");
+            when(otherConfig.getConfig()).thenReturn(configMap);
+
+            List<String> warnings = captureWarnings(() -> {
+                ConfigHelper.getIssuanceLimit(config);
+                ConfigHelper.getIssuanceLimit(otherConfig);
+            });
+
+            assertEquals(2, warnings.size(), warnings.toString());
         }
 
         @Test
