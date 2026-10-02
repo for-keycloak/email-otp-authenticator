@@ -29,7 +29,7 @@ jobs:
           cache-dependency-path: 'pom.xml'
 
       - name: Run unit tests
-        run: mvn -B test
+        run: mvn -B test -DskipTests=false
 
   e2e:
     runs-on: ubuntu-latest
