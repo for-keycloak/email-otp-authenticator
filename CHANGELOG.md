@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.7.0](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.6.0...v1.7.0) (2026-10-02)
+
+
+### Features
+
+* **keycloak:** add 26.8.0 and 26.7.5, bump 26.6.2 -&gt; 26.6.4 ([36f0582](https://github.com/for-keycloak/email-otp-authenticator/commit/36f0582fd7ed04a3acfdcf2f27c9cd540c6281c5))
+
+
+### Dependencies
+
+* bump maven plugins, junit, mockito, postgres, checkout and setup-java ([9ad3346](https://github.com/for-keycloak/email-otp-authenticator/commit/9ad3346522bcf6767a5674d636e0ed7b0e60ebc8))
+
+
+### Continuous Integration
+
+* **release:** build the JARs on published releases, kidager-bot runs release-please ([f92ff0b](https://github.com/for-keycloak/email-otp-authenticator/commit/f92ff0b8b57bcdfde92e0b52d2a71c69c84152f3))
+
 ## [1.6.0](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.5.0...v1.6.0) (2026-10-02)
 
 
