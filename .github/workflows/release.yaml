@@ -1,34 +1,21 @@
-name: 🚀 Release Please
+name: 🚀 Release
 
 on:
-  push:
-    branches:
-      - main
-
-concurrency: release-please
+  # The release PR and the releases come from kidager-bot (GitHub App)
+  release:
+    types: [published]
 
 permissions:
+  # Uploads the JARs to the release
   contents: write
-  pull-requests: write
+  # Cosign keyless signing
   id-token: write
 
 jobs:
-  release-please:
-    runs-on: ubuntu-latest
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
-    steps:
-      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
-        id: release
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-  # The following jobs are executed only if a release is created
   build-and-publish:
     runs-on: ubuntu-latest
-    needs: release-please
-    if: ${{ needs.release-please.outputs.release_created }}
+    env:
+      TAG: ${{ github.event.release.tag_name }}
     strategy:
       fail-fast: false
       matrix:
@@ -53,7 +40,7 @@ jobs:
         run: |
           mvn -B clean package \
             -P"${{ matrix.keycloak_version }}" \
-            -D"buildVersion=${{ needs.release-please.outputs.tag_name }}"
+            -D"buildVersion=$TAG"
 
       - id: jar-filepath-step
         run: echo "jar-filepath=$(find target -type f -name "*.jar" ! -name "original-*")" >> $GITHUB_OUTPUT
@@ -75,7 +62,7 @@ jobs:
 
       - name: Upload file to release
         run: |
-          gh release upload ${{ needs.release-please.outputs.tag_name }} ${{ steps.jar-filepath-step.outputs.jar-filepath }}
-          gh release upload ${{ needs.release-please.outputs.tag_name }} ${{ steps.jar-filepath-step.outputs.jar-filepath }}.bundle
+          gh release upload "$TAG" ${{ steps.jar-filepath-step.outputs.jar-filepath }}
+          gh release upload "$TAG" ${{ steps.jar-filepath-step.outputs.jar-filepath }}.bundle
         env:
           GH_TOKEN: ${{ github.TOKEN }}
