@@ -126,7 +126,43 @@ class EmailOTPFormAuthenticatorFactoryTest {
         void hasExpectedConfigCount() {
             List<ProviderConfigProperty> props = factory.getConfigProperties();
 
-            assertEquals(10, props.size());
+            assertEquals(13, props.size());
+        }
+
+        @Test
+        @DisplayName("includes resend-cooldown property")
+        void includesResendCooldownProperty() {
+            assertTrue(hasPropertyWithName("resend-cooldown"));
+        }
+
+        @Test
+        @DisplayName("includes issuance-limit property")
+        void includesIssuanceLimitProperty() {
+            assertTrue(hasPropertyWithName("issuance-limit"));
+        }
+
+        @Test
+        @DisplayName("includes issuance-limit-window property")
+        void includesIssuanceLimitWindowProperty() {
+            assertTrue(hasPropertyWithName("issuance-limit-window"));
+        }
+
+        @Test
+        @DisplayName("issuance limit properties are strings holding their defaults")
+        void issuanceLimitPropertyDefaults() {
+            assertEquals("0", propertyWithName("resend-cooldown").getDefaultValue());
+            assertEquals("0", propertyWithName("issuance-limit").getDefaultValue());
+            assertEquals("900", propertyWithName("issuance-limit-window").getDefaultValue());
+            assertEquals(ProviderConfigProperty.STRING_TYPE, propertyWithName("resend-cooldown").getType());
+            assertEquals(ProviderConfigProperty.STRING_TYPE, propertyWithName("issuance-limit").getType());
+            assertEquals(ProviderConfigProperty.STRING_TYPE, propertyWithName("issuance-limit-window").getType());
+        }
+
+        private ProviderConfigProperty propertyWithName(String name) {
+            return factory.getConfigProperties().stream()
+                .filter(p -> name.equals(p.getName()))
+                .findFirst()
+                .orElseThrow();
         }
 
         @Test
@@ -263,6 +299,24 @@ class EmailOTPFormAuthenticatorFactoryTest {
         @DisplayName("trust only when sole is enabled by default")
         void trustOnlyWhenSoleEnabledByDefault() {
             assertTrue(EmailOTPFormAuthenticatorFactory.SETTINGS_DEFAULT_VALUE_TRUST_ONLY_WHEN_SOLE);
+        }
+
+        @Test
+        @DisplayName("resend cooldown is disabled by default")
+        void resendCooldownDisabledByDefault() {
+            assertEquals(0, EmailOTPFormAuthenticatorFactory.SETTINGS_DEFAULT_VALUE_RESEND_COOLDOWN);
+        }
+
+        @Test
+        @DisplayName("issuance limit is disabled by default")
+        void issuanceLimitDisabledByDefault() {
+            assertEquals(0, EmailOTPFormAuthenticatorFactory.SETTINGS_DEFAULT_VALUE_ISSUANCE_LIMIT);
+        }
+
+        @Test
+        @DisplayName("default issuance window is 900 seconds (15 minutes)")
+        void defaultIssuanceLimitWindow() {
+            assertEquals(900, EmailOTPFormAuthenticatorFactory.SETTINGS_DEFAULT_VALUE_ISSUANCE_LIMIT_WINDOW);
         }
     }
 

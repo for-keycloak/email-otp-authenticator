@@ -4,7 +4,14 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
+import java.util.logging.SimpleFormatter;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -278,6 +285,160 @@ class ConfigHelperTest {
             long seconds = days == 0 ? 0 : days * 86400L;
 
             assertEquals(0L, seconds);
+        }
+    }
+
+    @Nested
+    @DisplayName("Issuance Limit Settings")
+    class IssuanceLimitSettings {
+
+        @Test
+        @DisplayName("resend cooldown and issuance limit are disabled when not configured")
+        void disabledWhenNotConfigured() {
+            when(config.getConfig()).thenReturn(configMap);
+
+            assertEquals(0, ConfigHelper.getResendCooldownSeconds(config));
+            assertEquals(0, ConfigHelper.getIssuanceLimit(config));
+            assertEquals(900, ConfigHelper.getIssuanceLimitWindowSeconds(config));
+        }
+
+        @Test
+        @DisplayName("defaults apply when there is no authenticator config")
+        void defaultsWithoutConfig() {
+            assertEquals(0, ConfigHelper.getResendCooldownSeconds((AuthenticatorConfigModel) null));
+            assertEquals(0, ConfigHelper.getIssuanceLimit((AuthenticatorConfigModel) null));
+            assertEquals(900, ConfigHelper.getIssuanceLimitWindowSeconds((AuthenticatorConfigModel) null));
+        }
+
+        @Test
+        @DisplayName("reads configured values")
+        void readsConfiguredValues() {
+            configMap.put("resend-cooldown", "60");
+            configMap.put("issuance-limit", "5");
+            configMap.put("issuance-limit-window", "1800");
+            when(config.getConfig()).thenReturn(configMap);
+
+            assertEquals(60, ConfigHelper.getResendCooldownSeconds(config));
+            assertEquals(5, ConfigHelper.getIssuanceLimit(config));
+            assertEquals(1800, ConfigHelper.getIssuanceLimitWindowSeconds(config));
+        }
+
+        @Test
+        @DisplayName("surrounding whitespace is ignored")
+        void whitespaceIsTrimmed() {
+            configMap.put("resend-cooldown", " 60 ");
+            configMap.put("issuance-limit", "5\t");
+            configMap.put("issuance-limit-window", "   ");
+            when(config.getConfig()).thenReturn(configMap);
+
+            assertEquals(60, ConfigHelper.getResendCooldownSeconds(config));
+            assertEquals(5, ConfigHelper.getIssuanceLimit(config));
+            assertEquals(900, ConfigHelper.getIssuanceLimitWindowSeconds(config));
+        }
+
+        @Test
+        @DisplayName("existing settings keep their parsing: surrounding whitespace falls back to the default")
+        void existingSettingsNotTrimmed() {
+            configMap.put("code-length", " 8 ");
+            when(config.getConfig()).thenReturn(configMap);
+
+            assertEquals(6, ConfigHelper.getOtpCodeLength(config));
+        }
+
+        @Test
+        @DisplayName("out-of-range values are kept but warned about, once per value")
+        void outOfRangeValuesWarnOnce() {
+            configMap.put("resend-cooldown", "-5");
+            configMap.put("issuance-limit", "250");
+            configMap.put("issuance-limit-window", "-1");
+            when(config.getConfig()).thenReturn(configMap);
+
+            List<String> warnings = captureWarnings(() -> {
+                for (int request = 0; request < 3; request++) {
+                    assertEquals(-5, ConfigHelper.getResendCooldownSeconds(config));
+                    assertEquals(250, ConfigHelper.getIssuanceLimit(config));
+                    assertEquals(-1, ConfigHelper.getIssuanceLimitWindowSeconds(config));
+                }
+            });
+
+            assertEquals(3, warnings.size(), "one warning per setting, not per request: " + warnings);
+            assertTrue(warnings.stream().anyMatch(w -> w.contains("resend-cooldown") && w.contains("-5")), warnings.toString());
+            assertTrue(warnings.stream().anyMatch(w -> w.contains("issuance-limit") && w.contains("250") && w.contains("100")), warnings.toString());
+            assertTrue(warnings.stream().anyMatch(w -> w.contains("issuance-limit-window") && w.contains("-1")), warnings.toString());
+        }
+
+        @Test
+        @DisplayName("an unparseable value is warned about once, not on every request")
+        void unparseableValueWarnsOnce() {
+            configMap.put("issuance-limit", "five");
+            when(config.getConfig()).thenReturn(configMap);
+
+            List<String> warnings = captureWarnings(() -> {
+                for (int request = 0; request < 3; request++) {
+                    assertEquals(0, ConfigHelper.getIssuanceLimit(config));
+                }
+            });
+
+            assertEquals(1, warnings.size(), warnings.toString());
+            assertTrue(warnings.get(0).contains("five"), warnings.toString());
+        }
+
+        @Test
+        @DisplayName("values in range are not warned about")
+        void inRangeValuesDoNotWarn() {
+            configMap.put("resend-cooldown", "0");
+            configMap.put("issuance-limit", "100");
+            configMap.put("issuance-limit-window", "900");
+            when(config.getConfig()).thenReturn(configMap);
+
+            List<String> warnings = captureWarnings(() -> {
+                ConfigHelper.getResendCooldownSeconds(config);
+                ConfigHelper.getIssuanceLimit(config);
+                ConfigHelper.getIssuanceLimitWindowSeconds(config);
+            });
+
+            assertTrue(warnings.isEmpty(), warnings.toString());
+        }
+
+        private List<String> captureWarnings(Runnable action) {
+            List<String> warnings = new CopyOnWriteArrayList<>();
+            Handler handler = new Handler() {
+                @Override
+                public void publish(LogRecord record) {
+                    if (record.getLevel().intValue() >= Level.WARNING.intValue()) {
+                        warnings.add(new SimpleFormatter().formatMessage(record));
+                    }
+                }
+
+                @Override
+                public void flush() {
+                }
+
+                @Override
+                public void close() {
+                }
+            };
+            Logger logger = Logger.getLogger(ConfigHelper.class.getName());
+            logger.addHandler(handler);
+            try {
+                action.run();
+            } finally {
+                logger.removeHandler(handler);
+            }
+            return warnings;
+        }
+
+        @Test
+        @DisplayName("invalid values fall back to the defaults")
+        void invalidValuesFallBack() {
+            configMap.put("resend-cooldown", "soon");
+            configMap.put("issuance-limit", "");
+            configMap.put("issuance-limit-window", "15m");
+            when(config.getConfig()).thenReturn(configMap);
+
+            assertEquals(0, ConfigHelper.getResendCooldownSeconds(config));
+            assertEquals(0, ConfigHelper.getIssuanceLimit(config));
+            assertEquals(900, ConfigHelper.getIssuanceLimitWindowSeconds(config));
         }
     }
 }

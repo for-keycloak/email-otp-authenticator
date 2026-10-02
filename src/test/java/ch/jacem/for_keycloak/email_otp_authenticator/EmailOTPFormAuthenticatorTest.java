@@ -5,6 +5,17 @@ import static org.mockito.Mockito.*;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+
+import jakarta.ws.rs.core.MultivaluedHashMap;
+import jakarta.ws.rs.core.MultivaluedMap;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -13,10 +24,24 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.common.ClientConnection;
+import org.keycloak.email.EmailException;
+import org.keycloak.email.EmailTemplateProvider;
+import org.keycloak.events.Errors;
+import org.keycloak.events.EventBuilder;
+import org.keycloak.forms.login.LoginFormsProvider;
+import org.keycloak.http.HttpRequest;
 import org.keycloak.jose.jws.crypto.HashUtils;
+import org.keycloak.models.AuthenticationExecutionModel;
+import org.keycloak.models.AuthenticatorConfigModel;
+import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
+import org.keycloak.models.SingleUseObjectProvider;
 import org.keycloak.models.UserModel;
+import org.keycloak.models.utils.FormMessage;
+import org.keycloak.services.messages.Messages;
+import org.keycloak.sessions.AuthenticationSessionModel;
+import org.keycloak.sessions.RootAuthenticationSessionModel;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -460,6 +485,523 @@ class EmailOTPFormAuthenticatorTest {
             }
 
             return maskedLocal + "@" + maskedDomain;
+        }
+    }
+
+    @Nested
+    @DisplayName("Resend Cooldown Calculation")
+    class ResendCooldownCalculation {
+
+        @Test
+        @DisplayName("returns the seconds left within the cooldown")
+        void remainingWithinCooldown() {
+            assertEquals(50, EmailOTPFormAuthenticator.resendCooldownRemaining(60, "1000", 1010));
+        }
+
+        @Test
+        @DisplayName("returns 0 once the cooldown has passed")
+        void zeroAfterCooldown() {
+            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(60, "1000", 1060));
+            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(60, "1000", 5000));
+        }
+
+        @Test
+        @DisplayName("returns 0 when the cooldown is disabled")
+        void zeroWhenDisabled() {
+            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(0, "1000", 1000));
+            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(-5, "1000", 1000));
+        }
+
+        @Test
+        @DisplayName("returns 0 when no code has been created yet")
+        void zeroWithoutCode() {
+            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(60, null, 1000));
+            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(60, "", 1000));
+        }
+
+        @Test
+        @DisplayName("returns 0 when the creation note is malformed")
+        void zeroWhenMalformed() {
+            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(60, "not-a-number", 1000));
+        }
+
+        @Test
+        @DisplayName("never waits beyond the code lifetime, so an expired code can always be replaced")
+        void cappedAtCodeLifetime() {
+            int cooldown = EmailOTPFormAuthenticator.effectiveResendCooldown(600, 60);
+
+            assertEquals(50, EmailOTPFormAuthenticator.resendCooldownRemaining(cooldown, "1000", 1010));
+            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(cooldown, "1000", 1060));
+            assertEquals(0, EmailOTPFormAuthenticator.resendCooldownRemaining(cooldown, "1000", 1120));
+        }
+
+        @Test
+        @DisplayName("effective cooldown is the configured one, capped at the code lifetime")
+        void effectiveCooldown() {
+            assertEquals(60, EmailOTPFormAuthenticator.effectiveResendCooldown(60, 600));
+            assertEquals(60, EmailOTPFormAuthenticator.effectiveResendCooldown(600, 60));
+            assertEquals(600, EmailOTPFormAuthenticator.effectiveResendCooldown(600, 0));
+            assertEquals(0, EmailOTPFormAuthenticator.effectiveResendCooldown(0, 60));
+        }
+
+        @Test
+        @DisplayName("message key carries the plural category for the language")
+        void messageKeyUsesPluralCategory() {
+            assertEquals("errorResendCooldownEmailOtpOne", EmailOTPFormAuthenticator.resendCooldownMessageKey(1, "en"));
+            assertEquals("errorResendCooldownEmailOtpMany", EmailOTPFormAuthenticator.resendCooldownMessageKey(45, "en"));
+            assertEquals("errorResendCooldownEmailOtpFew", EmailOTPFormAuthenticator.resendCooldownMessageKey(3, "ru"));
+            assertEquals("errorResendCooldownEmailOtpTwo", EmailOTPFormAuthenticator.resendCooldownMessageKey(2, "ar"));
+        }
+    }
+
+    @Nested
+    @DisplayName("Issuance Limits")
+    class IssuanceLimits {
+
+        private static final String CURRENT_OTP = "ABC1"; // contains '1', which the alphabet excludes, so a new code always differs
+
+        @Mock
+        private AuthenticationSessionModel authSession;
+
+        @Mock
+        private HttpRequest httpRequest;
+
+        @Mock
+        private EventBuilder event;
+
+        @Mock
+        private LoginFormsProvider form;
+
+        @Mock
+        private KeycloakContext keycloakContext;
+
+        @Mock
+        private EmailTemplateProvider emailProvider;
+
+        @Mock
+        private SingleUseObjectProvider singleUseObjects;
+
+        @Mock
+        private RootAuthenticationSessionModel rootSession;
+
+        @Mock
+        private AuthenticatorConfigModel config;
+
+        @Mock
+        private AuthenticationExecutionModel execution;
+
+        private final Map<String, String> notes = new HashMap<>();
+        private final Map<String, String> configMap = new HashMap<>();
+        private final MultivaluedMap<String, String> formParams = new MultivaluedHashMap<>();
+
+        @BeforeEach
+        void setUpFlow() throws Exception {
+            lenient().when(context.getAuthenticationSession()).thenReturn(authSession);
+            lenient().when(context.getUser()).thenReturn(user);
+            lenient().when(context.getRealm()).thenReturn(realm);
+            lenient().when(context.getSession()).thenReturn(session);
+            lenient().when(context.getEvent()).thenReturn(event);
+            lenient().when(context.form()).thenReturn(form);
+            lenient().when(context.getAuthenticatorConfig()).thenReturn(config);
+            lenient().when(context.getHttpRequest()).thenReturn(httpRequest);
+            lenient().when(context.getExecution()).thenReturn(execution);
+
+            lenient().when(config.getConfig()).thenReturn(configMap);
+            lenient().when(httpRequest.getDecodedFormParameters()).thenReturn(formParams);
+            lenient().when(event.user(any(UserModel.class))).thenReturn(event);
+
+            lenient().when(authSession.getParentSession()).thenReturn(rootSession);
+            lenient().when(rootSession.getId()).thenReturn("root-1");
+            lenient().when(authSession.getTabId()).thenReturn("tab-1");
+            lenient().when(authSession.getAuthNote(anyString())).thenAnswer(i -> notes.get(i.<String>getArgument(0)));
+            lenient().doAnswer(i -> notes.put(i.getArgument(0), i.getArgument(1)))
+                .when(authSession).setAuthNote(anyString(), anyString());
+            lenient().doAnswer(i -> notes.remove(i.<String>getArgument(0)))
+                .when(authSession).removeAuthNote(anyString());
+
+            lenient().when(form.setError(anyString(), any(Object[].class))).thenReturn(form);
+            lenient().when(form.addError(any(FormMessage.class))).thenReturn(form);
+            lenient().when(form.setAttribute(anyString(), any())).thenReturn(form);
+
+            lenient().when(session.getContext()).thenReturn(keycloakContext);
+            lenient().when(keycloakContext.resolveLocale(any())).thenReturn(Locale.ENGLISH);
+            lenient().when(session.getProvider(EmailTemplateProvider.class)).thenReturn(emailProvider);
+            lenient().when(session.singleUseObjects()).thenReturn(singleUseObjects);
+            lenient().when(emailProvider.setRealm(any())).thenReturn(emailProvider);
+            lenient().when(emailProvider.setUser(any())).thenReturn(emailProvider);
+
+            lenient().when(realm.getId()).thenReturn("realm-1");
+            lenient().when(realm.getName()).thenReturn("test-realm");
+            lenient().when(user.getId()).thenReturn("user-1");
+            lenient().when(user.getEmail()).thenReturn("user@test.local");
+            lenient().when(user.isEnabled()).thenReturn(true);
+        }
+
+        private long now() {
+            return System.currentTimeMillis() / 1000;
+        }
+
+        private void givenCurrentCodeCreatedSecondsAgo(long secondsAgo) {
+            notes.put(EmailOTPFormAuthenticator.AUTH_NOTE_OTP_KEY, CURRENT_OTP);
+            notes.put(EmailOTPFormAuthenticator.AUTH_NOTE_OTP_CREATED_AT, String.valueOf(now() - secondsAgo));
+        }
+
+        private void givenResendRequested() {
+            formParams.add(EmailOTPFormAuthenticator.OTP_FORM_RESEND_ACTION_NAME, "");
+        }
+
+        private void verifyNoEmailSent() throws Exception {
+            verify(emailProvider, never()).send(anyString(), anyString(), anyMap());
+        }
+
+        private void verifyNoBruteForceFailure() {
+            verify(context, never()).failureChallenge(any(), any());
+            verify(context, never()).failure(any());
+            verify(context, never()).failure(any(), any());
+        }
+
+        @Test
+        @DisplayName("resend within the cooldown sends no email, keeps the current code and asks the user to wait")
+        void resendWithinCooldownIsRefused() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_RESEND_COOLDOWN, "60");
+            String createdAt = String.valueOf(now() - 10);
+            notes.put(EmailOTPFormAuthenticator.AUTH_NOTE_OTP_KEY, CURRENT_OTP);
+            notes.put(EmailOTPFormAuthenticator.AUTH_NOTE_OTP_CREATED_AT, createdAt);
+            givenResendRequested();
+
+            authenticator.action(context);
+
+            verifyNoEmailSent();
+            assertEquals(CURRENT_OTP, notes.get(EmailOTPFormAuthenticator.AUTH_NOTE_OTP_KEY));
+            assertEquals(createdAt, notes.get(EmailOTPFormAuthenticator.AUTH_NOTE_OTP_CREATED_AT));
+            verify(event).error(EmailOTPFormAuthenticator.EVENT_ERROR_RESEND_COOLDOWN);
+            verify(form).setError(eq("errorResendCooldownEmailOtpMany"), (Object) argThat(v -> (Long) v >= 49 && (Long) v <= 50));
+            verify(context).challenge(any());
+            verifyNoBruteForceFailure();
+            // A refused resend must not consume the per-user issuance budget
+            verify(singleUseObjects, never()).putIfAbsent(anyString(), anyLong());
+        }
+
+        @Test
+        @DisplayName("resend after the cooldown emails a new, different code")
+        void resendAfterCooldownSendsNewCode() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_RESEND_COOLDOWN, "60");
+            givenCurrentCodeCreatedSecondsAgo(61);
+            String createdAt = notes.get(EmailOTPFormAuthenticator.AUTH_NOTE_OTP_CREATED_AT);
+            when(singleUseObjects.putIfAbsent(anyString(), anyLong())).thenReturn(true);
+            givenResendRequested();
+
+            authenticator.action(context);
+
+            verify(singleUseObjects).putIfAbsent("email-otp-resend:root-1:tab-1:" + createdAt, 60L);
+            verify(emailProvider).send(eq(EmailOTPFormAuthenticator.OTP_EMAIL_SUBJECT_KEY), eq(EmailOTPFormAuthenticator.OTP_EMAIL_TEMPLATE_NAME), anyMap());
+            assertNotEquals(CURRENT_OTP, notes.get(EmailOTPFormAuthenticator.AUTH_NOTE_OTP_KEY));
+            verify(event, never()).error(anyString());
+        }
+
+        @Test
+        @DisplayName("a concurrent resend of the same code (e.g. a double click) sends no second email")
+        void concurrentResendIsRefused() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_RESEND_COOLDOWN, "60");
+            givenCurrentCodeCreatedSecondsAgo(61);
+            // The other request already claimed the resend of this code
+            when(singleUseObjects.putIfAbsent(anyString(), anyLong())).thenReturn(false);
+            givenResendRequested();
+
+            authenticator.action(context);
+
+            verifyNoEmailSent();
+            assertEquals(CURRENT_OTP, notes.get(EmailOTPFormAuthenticator.AUTH_NOTE_OTP_KEY));
+            verify(event).error(EmailOTPFormAuthenticator.EVENT_ERROR_RESEND_COOLDOWN);
+            verify(form).setError("errorResendCooldownEmailOtpMany", 60L);
+            verify(context).challenge(any());
+            verifyNoBruteForceFailure();
+        }
+
+        @Test
+        @DisplayName("a concurrent resend is told the cooldown capped at the code lifetime, not the configured one")
+        void concurrentResendShowsEffectiveCooldown() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_RESEND_COOLDOWN, "600");
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_CODE_LIFETIME, "60");
+            givenCurrentCodeCreatedSecondsAgo(61);
+            when(singleUseObjects.putIfAbsent(anyString(), anyLong())).thenReturn(false);
+            givenResendRequested();
+
+            authenticator.action(context);
+
+            verifyNoEmailSent();
+            verify(singleUseObjects).putIfAbsent(startsWith("email-otp-resend:"), eq(60L));
+            verify(form).setError("errorResendCooldownEmailOtpMany", 60L);
+        }
+
+        @Test
+        @DisplayName("resend of an expired code is not held back by a cooldown longer than the code lifetime")
+        void resendOfExpiredCodeIgnoresCooldown() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_RESEND_COOLDOWN, "600");
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_CODE_LIFETIME, "60");
+            givenCurrentCodeCreatedSecondsAgo(120);
+            when(singleUseObjects.putIfAbsent(anyString(), anyLong())).thenReturn(true);
+            givenResendRequested();
+
+            authenticator.action(context);
+
+            verify(emailProvider).send(anyString(), anyString(), anyMap());
+            assertNotEquals(CURRENT_OTP, notes.get(EmailOTPFormAuthenticator.AUTH_NOTE_OTP_KEY));
+            verify(event, never()).error(anyString());
+        }
+
+        @Test
+        @DisplayName("resend with the cooldown disabled (default) emails a new code immediately")
+        void resendWithoutCooldownSendsImmediately() throws Exception {
+            givenCurrentCodeCreatedSecondsAgo(0);
+            givenResendRequested();
+
+            authenticator.action(context);
+
+            verify(emailProvider).send(anyString(), anyString(), anyMap());
+            assertNotEquals(CURRENT_OTP, notes.get(EmailOTPFormAuthenticator.AUTH_NOTE_OTP_KEY));
+        }
+
+        @Test
+        @DisplayName("issuance limit is not consulted when disabled (default)")
+        void limitDisabledByDefault() throws Exception {
+            authenticator.authenticate(context);
+
+            verify(session, never()).singleUseObjects();
+            verify(emailProvider).send(anyString(), anyString(), anyMap());
+        }
+
+        @Test
+        @DisplayName("re-rendering the form while the current code is valid claims no slot and sends nothing")
+        void validCodeIsReusedWithoutClaimingSlot() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_ISSUANCE_LIMIT, "5");
+            givenCurrentCodeCreatedSecondsAgo(10);
+
+            authenticator.authenticate(context);
+
+            verify(singleUseObjects, never()).putIfAbsent(anyString(), anyLong());
+            verifyNoEmailSent();
+            assertEquals(CURRENT_OTP, notes.get(EmailOTPFormAuthenticator.AUTH_NOTE_OTP_KEY));
+        }
+
+        @Test
+        @DisplayName("an expired code is replaced on a new login step and the replacement claims a slot")
+        void expiredCodeOnAuthenticateClaimsSlot() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_ISSUANCE_LIMIT, "5");
+            givenCurrentCodeCreatedSecondsAgo(1000);
+            when(singleUseObjects.putIfAbsent(anyString(), anyLong())).thenReturn(true);
+
+            authenticator.authenticate(context);
+
+            verify(singleUseObjects).putIfAbsent("email-otp-issuance:realm-1:user-1:0", 900L);
+            verify(emailProvider).send(anyString(), anyString(), anyMap());
+        }
+
+        @Test
+        @DisplayName("first code of a login claims an issuance slot for the user and is emailed")
+        void firstCodeClaimsSlot() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_ISSUANCE_LIMIT, "5");
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_ISSUANCE_LIMIT_WINDOW, "900");
+            when(singleUseObjects.putIfAbsent(anyString(), anyLong())).thenReturn(true);
+
+            authenticator.authenticate(context);
+
+            verify(singleUseObjects).putIfAbsent("email-otp-issuance:realm-1:user-1:0", 900L);
+            verify(emailProvider).send(anyString(), anyString(), anyMap());
+            verify(form, never()).setError(eq(EmailOTPFormAuthenticator.ISSUANCE_LIMIT_MESSAGE_KEY), any(Object[].class));
+        }
+
+        @Test
+        @DisplayName("first code of a login at the limit is not emailed and the user is told to try later")
+        void firstCodeAtLimitIsRefused() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_ISSUANCE_LIMIT, "2");
+            when(singleUseObjects.putIfAbsent(anyString(), anyLong())).thenReturn(false);
+
+            authenticator.authenticate(context);
+
+            verifyNoEmailSent();
+            assertNull(notes.get(EmailOTPFormAuthenticator.AUTH_NOTE_OTP_KEY));
+            verify(event).error(EmailOTPFormAuthenticator.EVENT_ERROR_ISSUANCE_LIMIT);
+            verify(form).setError(EmailOTPFormAuthenticator.ISSUANCE_LIMIT_MESSAGE_KEY);
+            verify(context).challenge(any());
+            verifyNoBruteForceFailure();
+        }
+
+        @Test
+        @DisplayName("refusals at the limit are not logged at INFO or above, so requests can't flood the log")
+        void refusalsAtLimitDoNotFloodLog() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_ISSUANCE_LIMIT, "2");
+            when(singleUseObjects.putIfAbsent(anyString(), anyLong())).thenReturn(false);
+
+            List<LogRecord> records = new CopyOnWriteArrayList<>();
+            Handler handler = new Handler() {
+                @Override
+                public void publish(LogRecord record) {
+                    records.add(record);
+                }
+
+                @Override
+                public void flush() {
+                }
+
+                @Override
+                public void close() {
+                }
+            };
+            java.util.logging.Logger logger = java.util.logging.Logger.getLogger(EmailOTPFormAuthenticator.class.getName());
+            logger.addHandler(handler);
+            try {
+                authenticator.authenticate(context);
+            } finally {
+                logger.removeHandler(handler);
+            }
+
+            verify(event).error(EmailOTPFormAuthenticator.EVENT_ERROR_ISSUANCE_LIMIT);
+            assertTrue(records.stream().noneMatch(r -> r.getLevel().intValue() >= Level.INFO.intValue()),
+                "logged at INFO or above: " + records.stream().map(LogRecord::getMessage).toList());
+        }
+
+        @Test
+        @DisplayName("resend at the limit sends no email and keeps the current code valid")
+        void resendAtLimitKeepsCurrentCode() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_ISSUANCE_LIMIT, "2");
+            when(singleUseObjects.putIfAbsent(anyString(), anyLong())).thenReturn(false);
+            givenCurrentCodeCreatedSecondsAgo(30);
+            givenResendRequested();
+
+            authenticator.action(context);
+
+            verifyNoEmailSent();
+            assertEquals(CURRENT_OTP, notes.get(EmailOTPFormAuthenticator.AUTH_NOTE_OTP_KEY));
+            verify(event).error(EmailOTPFormAuthenticator.EVENT_ERROR_ISSUANCE_LIMIT);
+            verify(form).setError(EmailOTPFormAuthenticator.ISSUANCE_LIMIT_MESSAGE_KEY);
+            verify(context).challenge(any());
+            verifyNoBruteForceFailure();
+        }
+
+        @Test
+        @DisplayName("a resend refused by the limit gives back its resend claim, so the next resend is tried again")
+        void resendAtLimitReleasesResendClaim() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_RESEND_COOLDOWN, "60");
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_ISSUANCE_LIMIT, "2");
+            givenCurrentCodeCreatedSecondsAgo(61);
+            String resendClaim = "email-otp-resend:root-1:tab-1:" + notes.get(EmailOTPFormAuthenticator.AUTH_NOTE_OTP_CREATED_AT);
+            when(singleUseObjects.putIfAbsent(eq(resendClaim), anyLong())).thenReturn(true);
+            when(singleUseObjects.putIfAbsent(startsWith("email-otp-issuance:"), anyLong())).thenReturn(false);
+            givenResendRequested();
+
+            authenticator.action(context);
+
+            verifyNoEmailSent();
+            verify(form).setError(EmailOTPFormAuthenticator.ISSUANCE_LIMIT_MESSAGE_KEY);
+            verify(singleUseObjects).remove(resendClaim);
+            verifyNoBruteForceFailure();
+        }
+
+        @Test
+        @DisplayName("a resend refused by the limit without a cooldown has no resend claim to give back")
+        void resendAtLimitWithoutCooldownReleasesNothing() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_ISSUANCE_LIMIT, "2");
+            when(singleUseObjects.putIfAbsent(anyString(), anyLong())).thenReturn(false);
+            givenCurrentCodeCreatedSecondsAgo(30);
+            givenResendRequested();
+
+            authenticator.action(context);
+
+            verify(singleUseObjects, never()).remove(anyString());
+        }
+
+        @Test
+        @DisplayName("regenerating an expired code at the limit sends no email, says so and registers no brute-force failure")
+        void expiredCodeAtLimitIsNotRegenerated() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_ISSUANCE_LIMIT, "2");
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_CODE_LIFETIME, "60");
+            when(singleUseObjects.putIfAbsent(anyString(), anyLong())).thenReturn(false);
+            givenCurrentCodeCreatedSecondsAgo(120);
+            formParams.add(EmailOTPFormAuthenticator.OTP_FORM_CODE_INPUT_NAME, CURRENT_OTP);
+
+            authenticator.action(context);
+
+            verifyNoEmailSent();
+            verify(event).error(EmailOTPFormAuthenticator.EVENT_ERROR_ISSUANCE_LIMIT);
+            verify(event, times(1)).error(anyString());
+            verify(form).addError(argThat(m -> EmailOTPFormAuthenticator.ISSUANCE_LIMIT_MESSAGE_KEY.equals(m.getMessage())));
+            verify(context).challenge(any());
+            verifyNoBruteForceFailure();
+            verify(context, never()).success();
+        }
+
+        @Test
+        @DisplayName("an expired code below the limit is replaced and still counts as a failed attempt, as before")
+        void expiredCodeBelowLimitKeepsExistingBehaviour() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_CODE_LIFETIME, "60");
+            givenCurrentCodeCreatedSecondsAgo(120);
+            formParams.add(EmailOTPFormAuthenticator.OTP_FORM_CODE_INPUT_NAME, CURRENT_OTP);
+
+            authenticator.action(context);
+
+            verify(emailProvider).send(anyString(), anyString(), anyMap());
+            verify(form).addError(argThat(m -> "errorExpiredEmailOtp".equals(m.getMessage())));
+            verify(event).error(Errors.EXPIRED_CODE);
+            verify(context).failureChallenge(any(), any());
+        }
+
+        @Test
+        @DisplayName("a code whose email fails gives its slot back")
+        void sendFailureReleasesSlot() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_ISSUANCE_LIMIT, "5");
+            when(singleUseObjects.putIfAbsent(anyString(), anyLong())).thenReturn(true);
+            doThrow(new EmailException("SMTP down")).when(emailProvider).send(anyString(), anyString(), anyMap());
+            givenResendRequested();
+
+            authenticator.action(context);
+
+            verify(singleUseObjects).remove("email-otp-issuance:realm-1:user-1:0");
+            verify(event).error(Errors.EMAIL_SEND_FAILED);
+            verify(form).setError(Messages.EMAIL_SENT_ERROR);
+        }
+
+        @Test
+        @DisplayName("with the limit disabled (default), submitting while no code exists is a failed attempt, as before")
+        void submitWithoutCodeUnchangedByDefault() throws Exception {
+            formParams.add(EmailOTPFormAuthenticator.OTP_FORM_CODE_INPUT_NAME, "GUESS1");
+
+            authenticator.action(context);
+
+            verifyNoEmailSent();
+            verify(event).error(Errors.INVALID_USER_CREDENTIALS);
+            verify(context).failureChallenge(any(), any());
+        }
+
+        @Test
+        @DisplayName("submitting after the limit refused this session's code is not a failed attempt; a code is sent instead")
+        void submitWithoutCodeSendsOne() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_ISSUANCE_LIMIT, "2");
+            when(singleUseObjects.putIfAbsent(anyString(), anyLong())).thenReturn(true);
+            formParams.add(EmailOTPFormAuthenticator.OTP_FORM_CODE_INPUT_NAME, "GUESS1");
+
+            authenticator.action(context);
+
+            verify(emailProvider).send(anyString(), anyString(), anyMap());
+            assertNotNull(notes.get(EmailOTPFormAuthenticator.AUTH_NOTE_OTP_KEY));
+            verify(context).challenge(any());
+            verifyNoBruteForceFailure();
+            verify(context, never()).success();
+        }
+
+        @Test
+        @DisplayName("submitting after the limit refused this session's code, while still at the limit, is not a failed attempt")
+        void submitWithoutCodeAtLimit() throws Exception {
+            configMap.put(EmailOTPFormAuthenticatorFactory.SETTINGS_KEY_ISSUANCE_LIMIT, "2");
+            when(singleUseObjects.putIfAbsent(anyString(), anyLong())).thenReturn(false);
+            formParams.add(EmailOTPFormAuthenticator.OTP_FORM_CODE_INPUT_NAME, "");
+
+            authenticator.action(context);
+
+            verifyNoEmailSent();
+            verify(form).setError(EmailOTPFormAuthenticator.ISSUANCE_LIMIT_MESSAGE_KEY);
+            verify(context).challenge(any());
+            verifyNoBruteForceFailure();
         }
     }
 }

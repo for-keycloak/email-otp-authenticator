@@ -21,9 +21,11 @@ interface AuthenticationExecutionInfo {
 
 export class KeycloakAdmin {
   private accessToken: string | null = null;
+  private accessTokenExpiresAt = 0;
 
   async getAccessToken(): Promise<string> {
-    if (this.accessToken) {
+    // Admin tokens are short-lived (60s by default); refresh shortly before expiry
+    if (this.accessToken && Date.now() < this.accessTokenExpiresAt) {
       return this.accessToken;
     }
 
@@ -49,6 +51,7 @@ export class KeycloakAdmin {
 
     const data: TokenResponse = await response.json();
     this.accessToken = data.access_token;
+    this.accessTokenExpiresAt = Date.now() + (data.expires_in - 10) * 1000;
     return this.accessToken;
   }
 
