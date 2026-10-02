@@ -141,6 +141,21 @@ class TranslationsTest {
             assertTrue(dontAskFor.contains("{1}"),
                 String.format("Missing {1} placeholder in 'dontAskForCodeFor' for locale '%s': %s", locale, dontAskFor));
         }
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("ch.jacem.for_keycloak.email_otp_authenticator.TranslationsTest#allLocales")
+        @DisplayName("escapes apostrophes for MessageFormat")
+        void escapesApostrophes(String locale) throws IOException {
+            Properties messages = loadMessages(locale);
+
+            // Keycloak renders every message through MessageFormat, where a single ' starts a
+            // quoted section and is dropped: "d'accès" would render as "daccès"
+            for (String key : messages.stringPropertyNames()) {
+                String value = messages.getProperty(key);
+                assertFalse(value.replace("''", "").contains("'"),
+                    String.format("Unescaped apostrophe in '%s' for locale '%s', write it as '': %s", key, locale, value));
+            }
+        }
     }
 
     @Nested
