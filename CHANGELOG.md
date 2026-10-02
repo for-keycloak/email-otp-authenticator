@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.6.0](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.5.0...v1.6.0) (2026-10-02)
+
+
+### Features
+
+* add resend cooldown and per-user limit on emailed codes ([#118](https://github.com/for-keycloak/email-otp-authenticator/issues/118)) ([cbeea45](https://github.com/for-keycloak/email-otp-authenticator/commit/cbeea45b824b9f80d7232c24f0ff435f984615dc))
+
+
+### Bug Fixes
+
+* **config:** cap issuance settings at their maximum and warn once per config ([#124](https://github.com/for-keycloak/email-otp-authenticator/issues/124)) ([23997e8](https://github.com/for-keycloak/email-otp-authenticator/commit/23997e86285287c11467cf92ae283a67adf1aa0f))
+* **i18n:** escape apostrophes in ca, fr and it messages ([#121](https://github.com/for-keycloak/email-otp-authenticator/issues/121)) ([5969892](https://github.com/for-keycloak/email-otp-authenticator/commit/59698922f5e26e91695d0214c9eeae412c6cc643))
+
+
+### Continuous Integration
+
+* **tests:** run unit tests in the unit job ([#123](https://github.com/for-keycloak/email-otp-authenticator/issues/123)) ([9b86992](https://github.com/for-keycloak/email-otp-authenticator/commit/9b86992d097c1ac409ef738ed78b20062dbcafce))
+
 ## [1.5.0](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.4.3...v1.5.0) (2026-09-03)
 
 
