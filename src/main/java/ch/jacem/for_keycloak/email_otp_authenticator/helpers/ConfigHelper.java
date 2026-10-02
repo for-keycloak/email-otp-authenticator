@@ -217,20 +217,26 @@ public class ConfigHelper {
             return defaultValue;
         }
 
+        // Per authenticator config, so each realm's bad value is reported
+        String reportKey = config.getId() + ":" + key + "=" + value;
+
         int number;
         try {
             number = Integer.parseInt(value.trim());
         } catch (NumberFormatException e) {
-            if (reportedValues.add(key + "=" + value)) {
+            if (reportedValues.add(reportKey)) {
                 logger.warnf("Invalid number '%s' for email OTP setting '%s', using the default %d", value, key, defaultValue);
             }
             return defaultValue;
         }
 
-        if (number < 0 && reportedValues.add(key + "=" + value)) {
+        if (number < 0 && reportedValues.add(reportKey)) {
             logger.warnf("Negative value %d for email OTP setting '%s' disables it", number, key);
-        } else if (number > max && reportedValues.add(key + "=" + value)) {
-            logger.warnf("Value %d for email OTP setting '%s' is above the maximum of %d, using %d", number, key, max, max);
+        } else if (number > max) {
+            if (reportedValues.add(reportKey)) {
+                logger.warnf("Value %d for email OTP setting '%s' is above the maximum of %d, using %d", number, key, max, max);
+            }
+            return max;
         }
 
         return number;
