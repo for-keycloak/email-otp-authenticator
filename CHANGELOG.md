@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.8.0](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.7.0...v1.8.0) (2026-10-12)
+
+
+### Features
+
+* **keycloak:** drop 26.2.5 and 26.7.3, default to 26.8.0 ([4f82239](https://github.com/for-keycloak/email-otp-authenticator/commit/4f82239ab508c76fb659ef5bd35ae26d23526daf))
+
+
+### Bug Fixes
+
+* **authenticator:** report the otp credential type on a correct email code ([bff7639](https://github.com/for-keycloak/email-otp-authenticator/commit/bff76391873a22da3c0dab9a18a4f24670c0e868))
+
 ## [1.7.0](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.6.0...v1.7.0) (2026-10-02)
 
 
