@@ -48,7 +48,7 @@ class EmailOTPFormAuthenticatorFactoryTest {
         @Test
         @DisplayName("getReferenceCategory is counted by Keycloak's brute-force protection")
         void getReferenceCategoryIsAllowedForBruteForce() {
-            assertEquals("otp", factory.getReferenceCategory()); // value from DefaultBruteForceProtector.ALLOWED_AUTHENTICATION_CATEGORIES, not referenced directly because that constant only exists in Keycloak 26.6+ and we build against all supported versions (26.2.5+)
+            assertEquals("otp", factory.getReferenceCategory()); // value from DefaultBruteForceProtector.ALLOWED_AUTHENTICATION_CATEGORIES, not referenced directly because that constant only exists in Keycloak 26.6+ and we build against all supported versions (26.3.5+)
         }
 
         @Test
