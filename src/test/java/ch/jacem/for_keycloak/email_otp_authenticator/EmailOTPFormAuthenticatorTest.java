@@ -38,6 +38,7 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.SingleUseObjectProvider;
 import org.keycloak.models.UserModel;
+import org.keycloak.models.credential.OTPCredentialModel;
 import org.keycloak.models.utils.FormMessage;
 import org.keycloak.services.messages.Messages;
 import org.keycloak.sessions.AuthenticationSessionModel;
@@ -1001,6 +1002,21 @@ class EmailOTPFormAuthenticatorTest {
             verifyNoEmailSent();
             verify(form).setError(EmailOTPFormAuthenticator.ISSUANCE_LIMIT_MESSAGE_KEY);
             verify(context).challenge(any());
+            verifyNoBruteForceFailure();
+        }
+
+        @Test
+        @DisplayName("a correct code succeeds with the otp credential type, so it clears brute-force second-factor failures")
+        void correctCodeReportsOtpCredentialType() {
+            givenCurrentCodeCreatedSecondsAgo(10);
+            formParams.add(EmailOTPFormAuthenticator.OTP_FORM_CODE_INPUT_NAME, CURRENT_OTP);
+            when(authSession.getAuthenticatedUser()).thenReturn(user);
+            when(user.isEmailVerified()).thenReturn(true);
+
+            authenticator.action(context);
+
+            verify(context).success(OTPCredentialModel.TYPE);
+            verify(context, never()).success();
             verifyNoBruteForceFailure();
         }
     }
