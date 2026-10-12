@@ -33,6 +33,7 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.models.RoleModel;
 import org.keycloak.models.SingleUseObjectProvider;
 import org.keycloak.models.UserModel;
+import org.keycloak.models.credential.OTPCredentialModel;
 import org.keycloak.services.messages.Messages;
 import org.keycloak.sessions.AuthenticationSessionModel;
 
@@ -214,7 +215,8 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
         // Set ACR for actual OTP entry
         setAcr(context, ACR_EMAIL_OTP);
 
-        context.success();
+        // Report the otp credential type so a correct code clears the brute-force second-factor failures
+        context.success(OTPCredentialModel.TYPE);
     }
 
     @Override
