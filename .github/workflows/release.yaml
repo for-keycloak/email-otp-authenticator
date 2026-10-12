@@ -22,12 +22,10 @@ jobs:
         keycloak_version:
           - keycloak-26.8.0
           - keycloak-26.7.5
-          - keycloak-26.7.3
           - keycloak-26.6.4
           - keycloak-26.5.7
           - keycloak-26.4.7
           - keycloak-26.3.5
-          - keycloak-26.2.5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
