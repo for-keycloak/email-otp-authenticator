@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.8.1](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.8.0...v1.8.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* **trust:** use a device trust cookie per user and realm ([bd3f477](https://github.com/for-keycloak/email-otp-authenticator/commit/bd3f477fd6bd6e570e49cda289712d94ace42eba))
+
+
+### Dependencies
+
+* bump actions/upload-artifact ([3448ab2](https://github.com/for-keycloak/email-otp-authenticator/commit/3448ab2e693faa676357044cdadfee1bac740fb6))
+* **keycloak:** bump 26.8.0 -&gt; 26.8.1 ([a874a73](https://github.com/for-keycloak/email-otp-authenticator/commit/a874a73467cabead303c8b0aa12ad4185c4485be))
+
 ## [1.8.0](https://github.com/for-keycloak/email-otp-authenticator/compare/v1.7.0...v1.8.0) (2026-10-12)
 
 
