@@ -76,6 +76,7 @@ When Device Trust is enabled, a checkbox appears on the OTP form allowing users 
 **Key characteristics:**
 - **Opt-in**: User must explicitly check the checkbox
 - **Device-specific**: Uses a secure cookie (HttpOnly, Secure, SameSite=Lax)
+- **Per user and realm**: Each account gets its own cookie, scoped to its realm, so several accounts can trust the same browser. Cookies set by earlier versions keep working and are moved over at the next login
 - **Priority**: Device trust takes priority over IP trust when both are enabled
 
 ### ACR (Authentication Context Class Reference) Values

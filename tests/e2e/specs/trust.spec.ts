@@ -5,7 +5,18 @@ import { mailpit } from '../setup/mailpit.js';
 import { database } from '../setup/database.js';
 import { TEST_PASSWORD } from '../setup/global-setup.js';
 
-const TRUST_COOKIE_NAME = 'EMAIL_OTP_DEVICE_TRUST';
+// Cookie shared by all users in earlier versions, also the prefix of the per-user cookies
+const LEGACY_TRUST_COOKIE_NAME = 'EMAIL_OTP_DEVICE_TRUST';
+
+type Cookie = Awaited<ReturnType<BrowserContext['cookies']>>[number];
+
+function isUserTrustCookie(cookie: Cookie): boolean {
+  return cookie.name.startsWith(`${LEGACY_TRUST_COOKIE_NAME}_`);
+}
+
+async function userTrustCookies(context: BrowserContext): Promise<Cookie[]> {
+  return (await context.cookies()).filter(isUserTrustCookie);
+}
 
 // Helper: Complete login with OTP
 async function loginWithOtp(
@@ -29,23 +40,22 @@ async function loginWithOtp(
   await loginPage.expectLoggedIn();
 }
 
-// Helper: Clear session but preserve device trust cookie
+// Helper: Clear session but preserve device trust cookies
 async function clearSessionKeepTrust(context: BrowserContext): Promise<void> {
-  const cookies = await context.cookies();
-  const trustCookie = cookies.find(c => c.name === TRUST_COOKIE_NAME);
+  const trustCookies = (await context.cookies()).filter(c => c.name.startsWith(LEGACY_TRUST_COOKIE_NAME));
 
   await context.clearCookies();
 
-  if (trustCookie) {
-    await context.addCookies([{
-      name: trustCookie.name,
-      value: trustCookie.value,
-      domain: trustCookie.domain,
-      path: trustCookie.path,
-      httpOnly: trustCookie.httpOnly,
-      secure: trustCookie.secure,
-      sameSite: trustCookie.sameSite as 'Strict' | 'Lax' | 'None',
-    }]);
+  if (trustCookies.length > 0) {
+    await context.addCookies(trustCookies.map(c => ({
+      name: c.name,
+      value: c.value,
+      domain: c.domain,
+      path: c.path,
+      httpOnly: c.httpOnly,
+      secure: c.secure,
+      sameSite: c.sameSite as 'Strict' | 'Lax' | 'None',
+    })));
   }
 }
 
@@ -153,8 +163,7 @@ test.describe('Device Trust', () => {
     await loginWithOtp(page, REALM, USER, true);
 
     // Get the trust cookie
-    const cookies = await context.cookies();
-    const trustCookie = cookies.find(c => c.name === TRUST_COOKIE_NAME);
+    const trustCookie = (await userTrustCookies(context))[0];
     expect(trustCookie).toBeDefined();
 
     // Tamper with the cookie value (modify signature)
@@ -180,7 +189,7 @@ test.describe('Device Trust', () => {
   test('invalid cookie format is rejected', async ({ page, context }) => {
     // Set a cookie with invalid format (no signature separator)
     await context.addCookies([{
-      name: TRUST_COOKIE_NAME,
+      name: LEGACY_TRUST_COOKIE_NAME,
       value: 'invalid-token-without-signature',
       domain: 'localhost',
       path: '/',
@@ -204,9 +213,7 @@ test.describe('Device Trust', () => {
     await loginWithOtp(page, REALM, USER, true);
 
     // Get the cookie
-    const cookies = await context.cookies();
-    const trustCookie = cookies.find(c => c.name === TRUST_COOKIE_NAME);
-    expect(trustCookie).toBeDefined();
+    expect(await userTrustCookies(context)).toHaveLength(1);
 
     await clearSessionKeepTrust(context);
     await mailpit.deleteAllMessages();
@@ -240,10 +247,10 @@ test.describe('Device Trust', () => {
   test('checking trust device sets cookie and skips OTP on next login', async ({ page, context }) => {
     await loginWithOtp(page, REALM, USER, true);
 
-    const cookies = await context.cookies();
-    const trustCookie = cookies.find(c => c.name === TRUST_COOKIE_NAME);
-    expect(trustCookie).toBeDefined();
-    expect(trustCookie!.httpOnly).toBe(true);
+    const trustCookies = await userTrustCookies(context);
+    expect(trustCookies).toHaveLength(1);
+    expect(trustCookies[0].httpOnly).toBe(true);
+    expect(trustCookies[0].path).toBe(`/realms/${REALM}/`);
 
     await clearSessionKeepTrust(context);
     await mailpit.deleteAllMessages();
@@ -258,6 +265,94 @@ test.describe('Device Trust', () => {
     await mailpit.deleteAllMessages();
 
     await expectLoginRequiresOtp(page, REALM, USER);
+  });
+
+  test('two users trusting the same browser both keep their trust', async ({ page, context }) => {
+    const OTHER_USER = 'trust-user-2';
+
+    await loginWithOtp(page, REALM, USER, true);
+    await clearSessionKeepTrust(context);
+    await mailpit.deleteAllMessages();
+
+    await loginWithOtp(page, REALM, OTHER_USER, true);
+    expect(await userTrustCookies(context)).toHaveLength(2);
+    await clearSessionKeepTrust(context);
+    await mailpit.deleteAllMessages();
+
+    await expectLoginSkipsOtp(page, REALM, USER);
+    await clearSessionKeepTrust(context);
+
+    await expectLoginSkipsOtp(page, REALM, OTHER_USER);
+  });
+
+  test('the same user trusting the browser in two realms keeps both', async ({ page, context }) => {
+    const OTHER_REALM = 'test-both-trust';
+
+    await loginWithOtp(page, REALM, USER, true);
+    await clearSessionKeepTrust(context);
+    await mailpit.deleteAllMessages();
+
+    await loginWithOtp(page, OTHER_REALM, USER, true);
+    expect(await userTrustCookies(context)).toHaveLength(2);
+    await clearSessionKeepTrust(context);
+    await mailpit.deleteAllMessages();
+
+    // The other realm also has IP trust, so only device trust may skip the code
+    await database.clearTrustedIps();
+
+    await expectLoginSkipsOtp(page, REALM, USER);
+    await clearSessionKeepTrust(context);
+
+    await expectLoginSkipsOtp(page, OTHER_REALM, USER);
+  });
+
+  test('a cookie from an earlier version still skips OTP and is moved to the per-user cookie', async ({ page, context }) => {
+    await loginWithOtp(page, REALM, USER, true);
+    const [trustCookie] = await userTrustCookies(context);
+    expect(trustCookie).toBeDefined();
+
+    // Same value under the old shared name and path, as set by earlier versions
+    await context.clearCookies();
+    await context.addCookies([{
+      name: LEGACY_TRUST_COOKIE_NAME,
+      value: trustCookie.value,
+      domain: trustCookie.domain,
+      path: '/',
+      httpOnly: true,
+      secure: trustCookie.secure,
+      sameSite: 'Lax',
+    }]);
+    await mailpit.deleteAllMessages();
+
+    await expectLoginSkipsOtp(page, REALM, USER);
+
+    const cookies = await context.cookies();
+    expect(cookies.filter(isUserTrustCookie).map(c => c.value)).toEqual([trustCookie.value]);
+    expect(cookies.find(c => c.name === LEGACY_TRUST_COOKIE_NAME)).toBeUndefined();
+  });
+
+  test('a cookie from an earlier version is left alone for another user', async ({ page, context }) => {
+    const OTHER_USER = 'trust-user-2';
+
+    await loginWithOtp(page, REALM, USER, true);
+    const [trustCookie] = await userTrustCookies(context);
+
+    await context.clearCookies();
+    await context.addCookies([{
+      name: LEGACY_TRUST_COOKIE_NAME,
+      value: trustCookie.value,
+      domain: trustCookie.domain,
+      path: '/',
+      httpOnly: true,
+      secure: trustCookie.secure,
+      sameSite: 'Lax',
+    }]);
+    await mailpit.deleteAllMessages();
+
+    await expectLoginRequiresOtp(page, REALM, OTHER_USER);
+
+    const legacyCookie = (await context.cookies()).find(c => c.name === LEGACY_TRUST_COOKIE_NAME);
+    expect(legacyCookie?.value).toBe(trustCookie.value);
   });
 });
 

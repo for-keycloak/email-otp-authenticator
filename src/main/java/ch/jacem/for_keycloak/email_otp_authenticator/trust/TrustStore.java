@@ -50,6 +50,16 @@ public interface TrustStore extends Provider {
     boolean isDeviceTrusted(RealmModel realm, UserModel user, String deviceToken);
 
     /**
+     * Get when a trusted device expires for a user.
+     *
+     * @param realm The realm
+     * @param user The user
+     * @param deviceToken The device token from cookie
+     * @return the expiration timestamp in seconds, 0 for permanent trust, or null if not trusted or expired
+     */
+    Long getDeviceTrustExpiresAt(RealmModel realm, UserModel user, String deviceToken);
+
+    /**
      * Add a trusted device for a user.
      *
      * @param realm The realm

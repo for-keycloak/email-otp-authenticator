@@ -85,6 +85,18 @@ public class JpaTrustStore implements TrustStore {
     }
 
     @Override
+    public Long getDeviceTrustExpiresAt(RealmModel realm, UserModel user, String deviceToken) {
+        if (deviceToken == null || deviceToken.isEmpty()) {
+            return null;
+        }
+        TrustedDeviceEntity entity = findTrustedDevice(realm.getId(), user.getId(), deviceToken);
+        if (entity == null || entity.isExpired()) {
+            return null;
+        }
+        return entity.getExpiresAt();
+    }
+
+    @Override
     public void trustDevice(RealmModel realm, UserModel user, String deviceToken, long expiresAtSeconds) {
         EntityManager em = getEntityManager();
         long now = System.currentTimeMillis() / 1000;

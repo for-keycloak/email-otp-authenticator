@@ -11,6 +11,7 @@ import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.Signature;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -34,6 +35,7 @@ import org.keycloak.models.RoleModel;
 import org.keycloak.models.SingleUseObjectProvider;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.credential.OTPCredentialModel;
+import org.keycloak.services.managers.AuthenticationManager;
 import org.keycloak.services.messages.Messages;
 import org.keycloak.sessions.AuthenticationSessionModel;
 
@@ -241,7 +243,8 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
 
         // Check device trust first (highest priority)
         if (shouldApplyTrust && ConfigHelper.isDeviceTrustEnabled(context)) {
-            String signedToken = getDeviceTokenFromCookie(context);
+            String cookieName = deviceTrustCookieName(realm, user);
+            String signedToken = getCookieValue(context, cookieName);
             if (signedToken != null) {
                 // Verify the signature and extract the original token
                 String deviceToken = verifyDeviceToken(context.getSession(), realm, signedToken);
@@ -256,6 +259,11 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
                 } else {
                     logger.debug("Device token signature verification failed");
                 }
+            } else if (migrateLegacyDeviceTrustCookie(context, cookieName)) {
+                logger.debugf("Device is trusted for user %s through the legacy cookie, skipping OTP", user.getId());
+                setAcr(context, ACR_EMAIL_OTP_TRUSTED_DEVICE);
+                context.success();
+                return;
             }
         }
 
@@ -324,7 +332,7 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
                 // Sign the token before putting in cookie
                 String signedToken = signDeviceToken(context.getSession(), realm, deviceToken);
                 if (signedToken != null) {
-                    setDeviceTrustCookie(context, signedToken, durationSeconds);
+                    setDeviceTrustCookie(context, deviceTrustCookieName(realm, user), signedToken, durationSeconds);
                 } else {
                     logger.warn("Could not sign device token, device trust cookie not set");
                 }
@@ -452,10 +460,20 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
         return null;
     }
 
-    private String getDeviceTokenFromCookie(AuthenticationFlowContext context) {
+    /**
+     * One cookie per realm and user, so several accounts can trust the same browser.
+     */
+    static String deviceTrustCookieName(RealmModel realm, UserModel user) {
+        String hash = HexFormat.of().formatHex(
+            HashUtils.hash("SHA-256", (realm.getId() + ":" + user.getId()).getBytes(StandardCharsets.UTF_8))
+        );
+        return DEVICE_TRUST_COOKIE_NAME + "_" + hash.substring(0, 16);
+    }
+
+    String getCookieValue(AuthenticationFlowContext context, String cookieName) {
         Map<String, Cookie> cookies = context.getHttpRequest().getHttpHeaders().getCookies();
         if (cookies != null) {
-            Cookie cookie = cookies.get(DEVICE_TRUST_COOKIE_NAME);
+            Cookie cookie = cookies.get(cookieName);
             if (cookie != null) {
                 return cookie.getValue();
             }
@@ -463,7 +481,37 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
         return null;
     }
 
-    private void setDeviceTrustCookie(AuthenticationFlowContext context, String deviceToken, long durationSeconds) {
+    /**
+     * Accepts the shared cookie set by earlier versions when it belongs to this user, and moves it
+     * to the per-user cookie. A legacy cookie of another account is left as it is.
+     */
+    boolean migrateLegacyDeviceTrustCookie(AuthenticationFlowContext context, String cookieName) {
+        String signedToken = getCookieValue(context, DEVICE_TRUST_COOKIE_NAME);
+        if (signedToken == null) {
+            return false;
+        }
+
+        RealmModel realm = context.getRealm();
+        String deviceToken = verifyDeviceToken(context.getSession(), realm, signedToken);
+        TrustStore trustStore = getTrustStore(context);
+        if (deviceToken == null || trustStore == null) {
+            return false;
+        }
+
+        Long expiresAt = trustStore.getDeviceTrustExpiresAt(realm, context.getUser(), deviceToken);
+        if (expiresAt == null) {
+            return false;
+        }
+
+        // 0 keeps the trust permanent, otherwise the cookie lasts as long as the trusted device
+        long durationSeconds = expiresAt == 0 ? 0 : Math.max(1, expiresAt - System.currentTimeMillis() / 1000);
+        setDeviceTrustCookie(context, cookieName, signedToken, durationSeconds);
+        expireLegacyDeviceTrustCookie(context);
+
+        return true;
+    }
+
+    private void setDeviceTrustCookie(AuthenticationFlowContext context, String cookieName, String deviceToken, long durationSeconds) {
         // Calculate max age
         int maxAge;
         if (durationSeconds == 0) {
@@ -473,13 +521,27 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
             maxAge = (int) durationSeconds;
         }
 
+        addCookieHeader(context, cookieName, deviceToken, deviceTrustCookiePath(context), maxAge);
+        logger.debugf("Set device trust cookie for token %s with max-age %d", deviceToken, maxAge);
+    }
+
+    // Same realm path as Keycloak's own cookies, base path included
+    String deviceTrustCookiePath(AuthenticationFlowContext context) {
+        return AuthenticationManager.getRealmCookiePath(context.getRealm(), context.getUriInfo());
+    }
+
+    private void expireLegacyDeviceTrustCookie(AuthenticationFlowContext context) {
+        addCookieHeader(context, DEVICE_TRUST_COOKIE_NAME, "", "/", 0);
+    }
+
+    private void addCookieHeader(AuthenticationFlowContext context, String name, String value, String path, int maxAge) {
         // Determine if we should use secure cookies (HTTPS)
         boolean secure = "https".equalsIgnoreCase(context.getUriInfo().getBaseUri().getScheme());
 
         // Build the Set-Cookie header value manually for maximum compatibility
         StringBuilder cookieBuilder = new StringBuilder();
-        cookieBuilder.append(DEVICE_TRUST_COOKIE_NAME).append("=").append(deviceToken);
-        cookieBuilder.append("; Path=/");
+        cookieBuilder.append(name).append("=").append(value);
+        cookieBuilder.append("; Path=").append(path);
         cookieBuilder.append("; Max-Age=").append(maxAge);
         cookieBuilder.append("; HttpOnly");
         cookieBuilder.append("; SameSite=Lax");
@@ -489,7 +551,6 @@ public class EmailOTPFormAuthenticator extends AbstractUsernameFormAuthenticator
 
         // Add the cookie header to the response
         context.getSession().getContext().getHttpResponse().addHeader("Set-Cookie", cookieBuilder.toString());
-        logger.debugf("Set device trust cookie for token %s with max-age %d", deviceToken, maxAge);
     }
 
     private void setAcr(AuthenticationFlowContext context, String acr) {
