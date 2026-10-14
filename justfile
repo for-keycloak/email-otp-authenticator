@@ -44,7 +44,7 @@ shell:
 # List all available Keycloak versions
 versions:
     @echo "Supported Keycloak versions:"
-    @echo "- 26.8.0 (default)"
+    @echo "- 26.8.1 (default)"
     @echo "- 26.7.5"
     @echo "- 26.6.4"
     @echo "- 26.5.7"
@@ -52,7 +52,7 @@ versions:
     @echo "- 26.3.5"
 
 # Run E2E tests (optionally specify a file pattern, requires test-e2e-setup if FILE is provided)
-test-e2e KC_VERSION="26.8.0" FILE="": (build-version KC_VERSION)
+test-e2e KC_VERSION="26.8.1" FILE="": (build-version KC_VERSION)
     #!/usr/bin/env bash
     cd tests/e2e
     if [ -z "{{FILE}}" ]; then
@@ -64,7 +64,7 @@ test-e2e KC_VERSION="26.8.0" FILE="": (build-version KC_VERSION)
     fi
 
 # Start test infrastructure only (for debugging or running specific tests)
-test-e2e-setup KC_VERSION="26.8.0": (build-version KC_VERSION)
+test-e2e-setup KC_VERSION="26.8.1": (build-version KC_VERSION)
     cd tests/e2e && KC_VERSION={{KC_VERSION}} docker compose up -d --wait
 
 # Stop test containers
