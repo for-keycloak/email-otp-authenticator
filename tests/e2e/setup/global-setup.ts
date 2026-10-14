@@ -248,6 +248,14 @@ async function setupDeviceTrustRealm() {
     TEST_PASSWORD
   );
 
+  // Second account for trusting the same browser from two users
+  await keycloakAdmin.createUser(
+    realmName,
+    'trust-user-2',
+    'trust-user-2@test.local',
+    TEST_PASSWORD
+  );
+
   await setupDeviceTrustFlow(realmName);
 }
 

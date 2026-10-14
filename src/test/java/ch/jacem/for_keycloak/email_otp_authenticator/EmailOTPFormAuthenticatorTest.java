@@ -385,7 +385,7 @@ class EmailOTPFormAuthenticatorTest {
     class CookieSecurity {
 
         @Test
-        @DisplayName("cookie name is constant")
+        @DisplayName("legacy cookie name, also the prefix of per-user cookies, is constant")
         void cookieNameConstant() {
             assertEquals("EMAIL_OTP_DEVICE_TRUST", EmailOTPFormAuthenticator.DEVICE_TRUST_COOKIE_NAME);
         }

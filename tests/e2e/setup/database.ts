@@ -25,6 +25,10 @@ class Database {
     }
   }
 
+  async clearTrustedIps(): Promise<void> {
+    await this.getPool().query('DELETE FROM email_otp_trusted_ip');
+  }
+
   async clearTrustEntriesForRealm(realmId: string): Promise<void> {
     const pool = this.getPool();
     try {
